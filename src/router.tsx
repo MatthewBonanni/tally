@@ -5,6 +5,8 @@ import { Accounts } from "@/pages/Accounts";
 import { Transactions } from "@/pages/Transactions";
 import { Import } from "@/pages/Import";
 import { Reports } from "@/pages/Reports";
+import { Budgets } from "@/pages/Budgets";
+import { Goals } from "@/pages/Goals";
 import { Categories } from "@/pages/Categories";
 import { Rules } from "@/pages/Rules";
 import { Settings } from "@/pages/Settings";
@@ -37,11 +39,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "budgets",
-        element: <Placeholder title="Budgets" />,
+        element: <Budgets />,
       },
       {
         path: "goals",
-        element: <Placeholder title="Goals" />,
+        element: <Goals />,
       },
       {
         path: "reports",
