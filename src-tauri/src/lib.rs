@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod import;
 pub mod models;
 
 use db::Database;
@@ -42,6 +43,10 @@ pub fn run() {
             commands::create_category,
             commands::update_category,
             commands::delete_category,
+            // Import
+            commands::preview_csv_file,
+            commands::parse_csv_file,
+            commands::import_transactions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

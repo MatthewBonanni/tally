@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Dashboard } from "@/pages/Dashboard";
 import { Accounts } from "@/pages/Accounts";
 import { Transactions } from "@/pages/Transactions";
+import { Import } from "@/pages/Import";
 import { Settings } from "@/pages/Settings";
 import { Placeholder } from "@/pages/Placeholder";
 
@@ -26,6 +27,10 @@ export const router = createBrowserRouter([
       {
         path: "transactions",
         element: <Transactions />,
+      },
+      {
+        path: "import",
+        element: <Import />,
       },
       {
         path: "budgets",

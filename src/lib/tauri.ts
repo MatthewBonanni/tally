@@ -7,7 +7,6 @@ import type {
   Goal,
   RecurringTransaction,
   TransactionFilters,
-  ImportPreview,
   TransferCandidate,
   SpendingByCategory,
   CashFlowData,
@@ -233,28 +232,61 @@ export async function takeNetWorthSnapshot(): Promise<NetWorthSnapshot> {
 }
 
 // Import commands
-export async function importOfxFile(filePath: string, accountId: string): Promise<ImportPreview> {
-  return invoke("import_ofx_file", { filePath, accountId });
-}
-
-export async function importCsvFile(
-  filePath: string,
-  accountId: string,
-  columnMapping: Record<string, string>,
-  dateFormat: string
-): Promise<ImportPreview> {
-  return invoke("import_csv_file", { filePath, accountId, columnMapping, dateFormat });
-}
-
-export async function confirmImport(transactions: Partial<Transaction>[], accountId: string): Promise<number> {
-  return invoke("confirm_import", { transactions, accountId });
-}
-
-export async function parseCsvPreview(filePath: string): Promise<{
+export interface CsvPreview {
   headers: string[];
   rows: string[][];
-}> {
-  return invoke("parse_csv_preview", { filePath });
+  totalRows: number;
+}
+
+export interface ColumnMapping {
+  dateColumn: number;
+  amountColumn: number;
+  debitColumn?: number;
+  creditColumn?: number;
+  payeeColumn?: number;
+  memoColumn?: number;
+  categoryColumn?: number;
+  dateFormat: string;
+  invertAmounts: boolean;
+}
+
+export interface ParsedTransaction {
+  date: string;
+  amount: number;
+  payee?: string;
+  memo?: string;
+  categoryHint?: string;
+  rawData: Record<string, string>;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  batchId: string;
+}
+
+export async function previewCsvFile(filePath: string): Promise<CsvPreview> {
+  return invoke("preview_csv_file", { filePath });
+}
+
+export async function parseCsvFile(
+  filePath: string,
+  mapping: ColumnMapping
+): Promise<ParsedTransaction[]> {
+  return invoke("parse_csv_file", { filePath, mapping });
+}
+
+export async function importTransactions(
+  accountId: string,
+  transactions: Array<{
+    date: string;
+    amount: number;
+    payee?: string;
+    memo?: string;
+    categoryId?: string;
+  }>
+): Promise<ImportResult> {
+  return invoke("import_transactions", { accountId, transactions });
 }
 
 // Export commands
