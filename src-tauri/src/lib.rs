@@ -1,0 +1,48 @@
+pub mod commands;
+pub mod db;
+pub mod error;
+pub mod models;
+
+use db::Database;
+use std::sync::Mutex;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .manage(Mutex::new(Database::new()))
+        .invoke_handler(tauri::generate_handler![
+            // Settings
+            commands::unlock_database,
+            commands::change_password,
+            commands::is_unlocked,
+            commands::get_setting,
+            commands::set_setting,
+            commands::export_to_json,
+            // Accounts
+            commands::list_accounts,
+            commands::get_account,
+            commands::create_account,
+            commands::update_account,
+            commands::delete_account,
+            // Transactions
+            commands::list_transactions,
+            commands::get_transaction,
+            commands::create_transaction,
+            commands::update_transaction,
+            commands::delete_transactions,
+            commands::bulk_categorize,
+            commands::detect_transfers,
+            commands::link_transfer,
+            commands::unlink_transfer,
+            // Categories
+            commands::list_categories,
+            commands::create_category,
+            commands::update_category,
+            commands::delete_category,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
