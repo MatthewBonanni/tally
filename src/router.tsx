@@ -5,6 +5,8 @@ import { Accounts } from "@/pages/Accounts";
 import { Transactions } from "@/pages/Transactions";
 import { Import } from "@/pages/Import";
 import { Reports } from "@/pages/Reports";
+import { Categories } from "@/pages/Categories";
+import { Rules } from "@/pages/Rules";
 import { Settings } from "@/pages/Settings";
 import { Placeholder } from "@/pages/Placeholder";
 
@@ -47,7 +49,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "categories",
-        element: <Placeholder title="Categories" />,
+        element: <Categories />,
       },
       {
         path: "recurring",
@@ -59,7 +61,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "rules",
-        element: <Placeholder title="Rules" />,
+        element: <Rules />,
       },
       {
         path: "settings",

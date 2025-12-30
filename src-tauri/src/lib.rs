@@ -43,6 +43,12 @@ pub fn run() {
             commands::create_category,
             commands::update_category,
             commands::delete_category,
+            // Category Rules
+            commands::list_category_rules,
+            commands::create_category_rule,
+            commands::update_category_rule,
+            commands::delete_category_rule,
+            commands::apply_category_rules,
             // Import
             commands::preview_csv_file,
             commands::parse_csv_file,

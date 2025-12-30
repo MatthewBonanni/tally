@@ -88,7 +88,7 @@ export interface Category {
 export interface CategoryRule {
   id: string;
   categoryId: string;
-  ruleType: "payee_contains" | "payee_exact" | "amount_equals" | "amount_range" | "regex";
+  ruleType: "payee_contains" | "payee_exact" | "payee_starts_with" | "payee_regex";
   pattern: string;
   amountMin: number | null;
   amountMax: number | null;

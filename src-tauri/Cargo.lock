@@ -2257,6 +2257,7 @@ dependencies = [
  "chrono",
  "csv",
  "dirs",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
