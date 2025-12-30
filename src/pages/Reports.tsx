@@ -46,6 +46,10 @@ const COLORS = [
 
 type Period = "thisMonth" | "lastMonth" | "last3Months" | "last6Months" | "thisYear" | "lastYear";
 
+function formatDateStr(date: Date): string {
+  return date.toISOString().split("T")[0] as string;
+}
+
 function getPeriodDates(period: Period): { start: string; end: string } {
   const now = new Date();
   const year = now.getFullYear();
@@ -54,33 +58,33 @@ function getPeriodDates(period: Period): { start: string; end: string } {
   switch (period) {
     case "thisMonth":
       return {
-        start: new Date(year, month, 1).toISOString().split("T")[0],
-        end: new Date(year, month + 1, 0).toISOString().split("T")[0],
+        start: formatDateStr(new Date(year, month, 1)),
+        end: formatDateStr(new Date(year, month + 1, 0)),
       };
     case "lastMonth":
       return {
-        start: new Date(year, month - 1, 1).toISOString().split("T")[0],
-        end: new Date(year, month, 0).toISOString().split("T")[0],
+        start: formatDateStr(new Date(year, month - 1, 1)),
+        end: formatDateStr(new Date(year, month, 0)),
       };
     case "last3Months":
       return {
-        start: new Date(year, month - 2, 1).toISOString().split("T")[0],
-        end: new Date(year, month + 1, 0).toISOString().split("T")[0],
+        start: formatDateStr(new Date(year, month - 2, 1)),
+        end: formatDateStr(new Date(year, month + 1, 0)),
       };
     case "last6Months":
       return {
-        start: new Date(year, month - 5, 1).toISOString().split("T")[0],
-        end: new Date(year, month + 1, 0).toISOString().split("T")[0],
+        start: formatDateStr(new Date(year, month - 5, 1)),
+        end: formatDateStr(new Date(year, month + 1, 0)),
       };
     case "thisYear":
       return {
-        start: new Date(year, 0, 1).toISOString().split("T")[0],
-        end: new Date(year, 11, 31).toISOString().split("T")[0],
+        start: formatDateStr(new Date(year, 0, 1)),
+        end: formatDateStr(new Date(year, 11, 31)),
       };
     case "lastYear":
       return {
-        start: new Date(year - 1, 0, 1).toISOString().split("T")[0],
-        end: new Date(year - 1, 11, 31).toISOString().split("T")[0],
+        start: formatDateStr(new Date(year - 1, 0, 1)),
+        end: formatDateStr(new Date(year - 1, 11, 31)),
       };
   }
 }
@@ -306,7 +310,7 @@ export function Reports() {
                           outerRadius={100}
                           dataKey="value"
                         >
-                          {spendingByCategory.map((entry, index) => (
+                          {spendingByCategory.map((_, index) => (
                             <Cell
                               key={`cell-${index}`}
                               fill={COLORS[index % COLORS.length]}

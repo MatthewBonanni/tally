@@ -90,7 +90,7 @@ export function Recurring() {
         amount: item.averageAmount,
         categoryId: item.categoryId,
         frequency: item.frequency as RecurringTransaction["frequency"],
-        startDate: item.transactions[0]?.date || new Date().toISOString().split("T")[0],
+        startDate: item.transactions[0]?.date ?? new Date().toISOString().split("T")[0]!,
         endDate: null,
         nextExpectedDate: item.nextExpectedDate,
         lastMatchedTransactionId: item.transactions[item.transactions.length - 1]?.id || null,

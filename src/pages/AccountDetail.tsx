@@ -130,14 +130,14 @@ export function AccountDetail() {
     sorted.forEach((t, i) => {
       history.push({
         date: t.date,
-        balance: balances[i + 1],
+        balance: balances[i + 1] ?? 0,
       });
     });
 
     // Add current balance at the end
     if (history.length > 0) {
       history.push({
-        date: new Date().toISOString().split("T")[0],
+        date: new Date().toISOString().split("T")[0] as string,
         balance: account.currentBalance,
       });
     }

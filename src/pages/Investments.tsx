@@ -26,7 +26,7 @@ import { listHoldings } from "@/lib/tauri";
 import { formatMoney } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-interface Holding {
+interface InvestmentHolding {
   id: string;
   accountId: string;
   accountName: string;
@@ -57,7 +57,7 @@ const SECURITY_TYPE_LABELS: Record<string, string> = {
 
 export function Investments() {
   const { accounts, fetchAccounts } = useAccountStore();
-  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [holdings, setHoldings] = useState<InvestmentHolding[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function Investments() {
   const loadHoldings = async () => {
     try {
       const data = await listHoldings();
-      setHoldings(data as Holding[]);
+      setHoldings(data as unknown as InvestmentHolding[]);
     } catch (err) {
       console.error("Failed to load holdings:", err);
     } finally {

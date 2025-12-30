@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Tags, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronRight, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -145,7 +145,7 @@ export function Categories() {
     try {
       const data = {
         name: formData.name,
-        categoryType: formData.categoryType,
+        categoryType: formData.categoryType as "income" | "expense" | "transfer",
         parentId: formData.parentId || null,
         color: formData.color,
       };

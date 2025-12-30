@@ -150,7 +150,7 @@ export function Goals() {
     try {
       const data = {
         name: formData.name,
-        goalType: formData.goalType,
+        goalType: formData.goalType as "savings" | "debt_payoff" | "spending_limit",
         targetAmount: Math.round(parseFloat(formData.targetAmount) * 100),
         currentAmount: Math.round(parseFloat(formData.currentAmount || "0") * 100),
         targetDate: formData.targetDate || null,

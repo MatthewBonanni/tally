@@ -117,7 +117,9 @@ export function Budgets() {
   );
 
   const navigateMonth = (direction: "prev" | "next") => {
-    const [year, month] = currentMonth.split("-").map(Number);
+    const parts = currentMonth.split("-").map(Number);
+    const year = parts[0] ?? new Date().getFullYear();
+    const month = parts[1] ?? 1;
     let newYear = year;
     let newMonth = month + (direction === "next" ? 1 : -1);
 
@@ -133,7 +135,9 @@ export function Budgets() {
   };
 
   const formatMonthDisplay = (monthStr: string) => {
-    const [year, month] = monthStr.split("-").map(Number);
+    const parts = monthStr.split("-").map(Number);
+    const year = parts[0] ?? new Date().getFullYear();
+    const month = parts[1] ?? 1;
     return new Date(year, month - 1).toLocaleDateString("en-US", {
       month: "long",
       year: "numeric",
@@ -183,7 +187,7 @@ export function Budgets() {
       const data = {
         categoryId: formData.categoryId,
         amount: Math.round(parseFloat(formData.amount) * 100),
-        periodType: formData.periodType,
+        periodType: formData.periodType as "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly",
         rollover: formData.rollover,
       };
 

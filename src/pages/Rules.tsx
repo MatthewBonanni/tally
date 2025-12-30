@@ -135,10 +135,11 @@ export function Rules() {
     try {
       const data = {
         categoryId: formData.categoryId,
-        ruleType: formData.ruleType,
+        ruleType: formData.ruleType as "payee_contains" | "payee_exact" | "payee_starts_with" | "payee_regex",
         pattern: formData.pattern,
         amountMin: formData.amountMin ? Math.round(parseFloat(formData.amountMin) * 100) : null,
         amountMax: formData.amountMax ? Math.round(parseFloat(formData.amountMax) * 100) : null,
+        accountId: null,
         priority: parseInt(formData.priority) || 0,
         isActive: formData.isActive,
       };

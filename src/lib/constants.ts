@@ -3,6 +3,7 @@ export const ACCOUNT_TYPES = {
   savings: { label: "Savings", icon: "PiggyBank", color: "green" },
   credit_card: { label: "Credit Card", icon: "CreditCard", color: "purple" },
   investment: { label: "Investment", icon: "TrendingUp", color: "orange" },
+  retirement: { label: "Retirement", icon: "TrendingUp", color: "amber" },
   loan: { label: "Loan", icon: "Landmark", color: "red" },
   cash: { label: "Cash", icon: "Banknote", color: "emerald" },
   other: { label: "Other", icon: "CircleDollarSign", color: "gray" },
