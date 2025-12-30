@@ -7,6 +7,7 @@ pub mod rules;
 pub mod budgets;
 pub mod goals;
 pub mod recurring;
+pub mod investments;
 
 pub use settings::*;
 pub use accounts::*;
@@ -17,3 +18,4 @@ pub use rules::*;
 pub use budgets::*;
 pub use goals::*;
 pub use recurring::*;
+pub use investments::*;

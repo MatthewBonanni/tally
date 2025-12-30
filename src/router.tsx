@@ -9,6 +9,7 @@ import { Budgets } from "@/pages/Budgets";
 import { Goals } from "@/pages/Goals";
 import { Categories } from "@/pages/Categories";
 import { Recurring } from "@/pages/Recurring";
+import { Investments } from "@/pages/Investments";
 import { Rules } from "@/pages/Rules";
 import { Settings } from "@/pages/Settings";
 import { Placeholder } from "@/pages/Placeholder";
@@ -60,7 +61,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "investments",
-        element: <Placeholder title="Investments" />,
+        element: <Investments />,
       },
       {
         path: "rules",
