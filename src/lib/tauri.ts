@@ -6,6 +6,7 @@ import type {
   Budget,
   Goal,
   RecurringTransaction,
+  DetectedRecurring,
   TransactionFilters,
   TransferCandidate,
   SpendingByCategory,
@@ -184,7 +185,7 @@ export async function listRecurringTransactions(): Promise<RecurringTransaction[
   return invoke("list_recurring_transactions");
 }
 
-export async function detectRecurringTransactions(): Promise<RecurringTransaction[]> {
+export async function detectRecurringTransactions(): Promise<DetectedRecurring[]> {
   return invoke("detect_recurring_transactions");
 }
 

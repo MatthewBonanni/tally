@@ -8,6 +8,7 @@ import { Reports } from "@/pages/Reports";
 import { Budgets } from "@/pages/Budgets";
 import { Goals } from "@/pages/Goals";
 import { Categories } from "@/pages/Categories";
+import { Recurring } from "@/pages/Recurring";
 import { Rules } from "@/pages/Rules";
 import { Settings } from "@/pages/Settings";
 import { Placeholder } from "@/pages/Placeholder";
@@ -55,7 +56,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "recurring",
-        element: <Placeholder title="Recurring Transactions" />,
+        element: <Recurring />,
       },
       {
         path: "investments",

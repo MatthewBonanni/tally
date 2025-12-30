@@ -156,6 +156,25 @@ export interface RecurringTransaction {
   updatedAt: string;
 }
 
+export interface DetectedRecurring {
+  payee: string;
+  normalizedPayee: string;
+  averageAmount: number;
+  frequency: string;
+  frequencyDays: number;
+  occurrences: number;
+  lastDate: string;
+  nextExpectedDate: string;
+  accountId: string;
+  accountName: string;
+  categoryId: string | null;
+  transactions: Array<{
+    id: string;
+    date: string;
+    amount: number;
+  }>;
+}
+
 export interface Security {
   id: string;
   symbol: string;

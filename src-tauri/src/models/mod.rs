@@ -155,3 +155,24 @@ pub struct NetWorthSnapshot {
     pub net_worth: i64,
     pub created_at: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecurringTransaction {
+    pub id: String,
+    pub account_id: String,
+    pub payee: String,
+    pub amount: i64,
+    pub category_id: Option<String>,
+    pub frequency: String,
+    pub start_date: String,
+    pub end_date: Option<String>,
+    pub next_expected_date: Option<String>,
+    pub last_matched_transaction_id: Option<String>,
+    pub tolerance_days: i32,
+    pub tolerance_amount: i64,
+    pub is_auto_detected: bool,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
