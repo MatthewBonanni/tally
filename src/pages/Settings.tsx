@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Moon, Sun, Lock, Download, Database } from "lucide-react";
+import { Moon, Sun, Lock, Database, FileText, FileJson } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +68,7 @@ export function Settings() {
     }
   };
 
-  const handleExportData = async () => {
+  const handleExportJson = async () => {
     try {
       const json = await api.exportToJson();
       const blob = new Blob([json], { type: "application/json" });
@@ -80,6 +80,21 @@ export function Settings() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export failed:", err);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const csv = await api.exportToCsv({});
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transactions-${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("CSV export failed:", err);
     }
   };
 
@@ -162,14 +177,27 @@ export function Settings() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Export Data</p>
+                    <p className="font-medium">Export Full Backup</p>
                     <p className="text-sm text-muted-foreground">
-                      Download a backup of all your data
+                      Download all accounts, transactions, and settings
                     </p>
                   </div>
-                  <Button variant="outline" onClick={handleExportData}>
-                    <Download className="h-4 w-4 mr-2" />
+                  <Button variant="outline" onClick={handleExportJson}>
+                    <FileJson className="h-4 w-4 mr-2" />
                     Export JSON
+                  </Button>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Export Transactions</p>
+                    <p className="text-sm text-muted-foreground">
+                      Download transactions as CSV for spreadsheets
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={handleExportCsv}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export CSV
                   </Button>
                 </div>
                 <Separator />

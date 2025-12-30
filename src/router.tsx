@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Dashboard } from "@/pages/Dashboard";
 import { Accounts } from "@/pages/Accounts";
+import { AccountDetail } from "@/pages/AccountDetail";
 import { Transactions } from "@/pages/Transactions";
 import { Import } from "@/pages/Import";
 import { Reports } from "@/pages/Reports";
@@ -12,7 +13,6 @@ import { Recurring } from "@/pages/Recurring";
 import { Investments } from "@/pages/Investments";
 import { Rules } from "@/pages/Rules";
 import { Settings } from "@/pages/Settings";
-import { Placeholder } from "@/pages/Placeholder";
 
 export const router = createBrowserRouter([
   {
@@ -29,7 +29,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "accounts/:id",
-        element: <Placeholder title="Account Details" />,
+        element: <AccountDetail />,
       },
       {
         path: "transactions",

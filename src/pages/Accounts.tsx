@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Wallet,
@@ -12,6 +13,7 @@ import {
   Pencil,
   Trash2,
   EyeOff,
+  ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,7 @@ const iconMap = {
 };
 
 export function Accounts() {
+  const navigate = useNavigate();
   const { accounts, fetchAccounts, createAccount, updateAccount, deleteAccount } =
     useAccountStore();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -162,6 +165,7 @@ export function Accounts() {
                   onEdit={() => handleOpenDialog(account)}
                   onDelete={() => handleDelete(account.id)}
                   onHide={() => updateAccount(account.id, { isHidden: !account.isHidden })}
+                  onViewDetails={() => navigate(`/accounts/${account.id}`)}
                 />
               ))}
               {groupedAccounts.assets.length === 0 && (
@@ -193,6 +197,7 @@ export function Accounts() {
                   onEdit={() => handleOpenDialog(account)}
                   onDelete={() => handleDelete(account.id)}
                   onHide={() => updateAccount(account.id, { isHidden: !account.isHidden })}
+                  onViewDetails={() => navigate(`/accounts/${account.id}`)}
                 />
               ))}
               {groupedAccounts.liabilities.length === 0 && (
@@ -312,9 +317,10 @@ interface AccountCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onHide: () => void;
+  onViewDetails: () => void;
 }
 
-function AccountCard({ account, onEdit, onDelete, onHide }: AccountCardProps) {
+function AccountCard({ account, onEdit, onDelete, onHide, onViewDetails }: AccountCardProps) {
   const typeInfo = ACCOUNT_TYPES[account.accountType];
   const Icon = iconMap[typeInfo.icon as keyof typeof iconMap] || Wallet;
 
@@ -337,6 +343,10 @@ function AccountCard({ account, onEdit, onDelete, onHide }: AccountCardProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onViewDetails}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              View Details
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onEdit}>
               <Pencil className="h-4 w-4 mr-2" />
               Edit
