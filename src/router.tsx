@@ -4,6 +4,7 @@ import { Dashboard } from "@/pages/Dashboard";
 import { Accounts } from "@/pages/Accounts";
 import { Transactions } from "@/pages/Transactions";
 import { Import } from "@/pages/Import";
+import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
 import { Placeholder } from "@/pages/Placeholder";
 
@@ -42,7 +43,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "reports",
-        element: <Placeholder title="Reports" />,
+        element: <Reports />,
       },
       {
         path: "categories",
