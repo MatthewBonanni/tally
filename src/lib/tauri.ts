@@ -307,3 +307,16 @@ export async function getSetting(key: string): Promise<string | null> {
 export async function setSetting(key: string, value: string): Promise<void> {
   return invoke("set_setting", { key, value });
 }
+
+// Database path commands
+export async function getDatabasePath(): Promise<string> {
+  return invoke("get_database_path");
+}
+
+export async function getDefaultDatabasePath(): Promise<string> {
+  return invoke("get_default_database_path");
+}
+
+export async function setDatabasePath(path: string | null): Promise<string> {
+  return invoke("set_database_path", { path });
+}

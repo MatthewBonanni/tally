@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod config;
 pub mod db;
 pub mod error;
 pub mod import;
@@ -22,6 +23,9 @@ pub fn run() {
             commands::get_setting,
             commands::set_setting,
             commands::export_to_json,
+            commands::get_database_path,
+            commands::set_database_path,
+            commands::get_default_database_path,
             // Accounts
             commands::list_accounts,
             commands::get_account,

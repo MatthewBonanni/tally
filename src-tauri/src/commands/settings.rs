@@ -1,3 +1,4 @@
+use crate::config::AppConfig;
 use crate::db::Database;
 use crate::error::Result;
 use std::sync::Mutex;
@@ -119,4 +120,32 @@ pub fn export_to_json(db: State<'_, Mutex<Database>>) -> Result<String> {
     export.insert("categories".to_string(), serde_json::Value::Array(categories));
 
     Ok(serde_json::to_string_pretty(&export)?)
+}
+
+#[tauri::command]
+pub fn get_database_path(db: State<'_, Mutex<Database>>) -> String {
+    let database = db.lock().unwrap();
+    database.get_db_path().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+pub fn get_default_database_path() -> String {
+    AppConfig::default_db_path().to_string_lossy().to_string()
+}
+
+#[tauri::command]
+pub fn set_database_path(
+    path: Option<String>,
+    db: State<'_, Mutex<Database>>,
+) -> Result<String> {
+    // Update config
+    let mut config = AppConfig::load();
+    config.set_db_path(path);
+    config.save()?;
+
+    // Reload database with new path
+    let mut database = db.lock().unwrap();
+    database.reload_config();
+
+    Ok(database.get_db_path().to_string_lossy().to_string())
 }

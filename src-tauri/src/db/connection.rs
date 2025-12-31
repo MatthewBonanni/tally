@@ -1,3 +1,4 @@
+use crate::config::AppConfig;
 use crate::error::{AppError, Result};
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use rusqlite::Connection;
@@ -10,15 +11,35 @@ pub struct Database {
 
 impl Database {
     pub fn new() -> Self {
-        let data_dir = dirs::data_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("money");
+        let config = AppConfig::load();
+        let db_path = config.get_db_path();
 
-        std::fs::create_dir_all(&data_dir).ok();
+        // Ensure the directory exists
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
 
         Self {
             conn: None,
-            db_path: data_dir.join("data.db"),
+            db_path,
+        }
+    }
+
+    pub fn get_db_path(&self) -> &PathBuf {
+        &self.db_path
+    }
+
+    pub fn reload_config(&mut self) {
+        // Close existing connection
+        self.conn = None;
+
+        // Reload path from config
+        let config = AppConfig::load();
+        self.db_path = config.get_db_path();
+
+        // Ensure the directory exists
+        if let Some(parent) = self.db_path.parent() {
+            std::fs::create_dir_all(parent).ok();
         }
     }
 
