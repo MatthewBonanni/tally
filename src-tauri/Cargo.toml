@@ -1,16 +1,16 @@
 [package]
-name = "money"
+name = "tally"
 version = "0.1.0"
-description = "Personal Finance App"
+description = "Tally - Personal Finance App"
 authors = [""]
 edition = "2021"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
-name = "money_lib"
+name = "tally_lib"
 
 [[bin]]
-name = "money"
+name = "tally"
 path = "src/main.rs"
 
 [build-dependencies]

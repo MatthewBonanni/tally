@@ -25,7 +25,7 @@ impl AppConfig {
     pub fn default_data_dir() -> PathBuf {
         dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("money")
+            .join("tally")
     }
 
     /// Get the default database path

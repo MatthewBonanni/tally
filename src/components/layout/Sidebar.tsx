@@ -73,7 +73,7 @@ export function Sidebar() {
             <DollarSign className="h-5 w-5" />
           </div>
           {!sidebarCollapsed && (
-            <span className="text-lg font-semibold">Money</span>
+            <span className="text-lg font-semibold">Tally</span>
           )}
         </div>
       </div>

@@ -1,4 +1,4 @@
-# Money
+# Tally
 
 A local-first, privacy-focused personal finance application. All your financial data stays on your machine, encrypted with SQLCipher.
 
@@ -36,11 +36,11 @@ A local-first, privacy-focused personal finance application. All your financial 
 
 ### Pre-built Releases (Recommended)
 
-Download the latest release for your platform from the [Releases](https://github.com/yourusername/money/releases) page:
+Download the latest release for your platform from the [Releases](https://github.com/yourusername/tally/releases) page:
 
-- **macOS**: `Money.dmg` (Universal binary for Intel and Apple Silicon)
-- **Windows**: `Money.msi` (coming soon)
-- **Linux**: `Money.AppImage` (coming soon)
+- **macOS**: `Tally.dmg` (Universal binary for Intel and Apple Silicon)
+- **Windows**: `Tally.msi` (coming soon)
+- **Linux**: `Tally.AppImage` (coming soon)
 
 ### Build from Source
 
@@ -57,8 +57,8 @@ Download the latest release for your platform from the [Releases](https://github
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/money.git
-   cd money
+   git clone https://github.com/yourusername/tally.git
+   cd tally
    ```
 
 2. Install dependencies:
@@ -102,9 +102,9 @@ To import:
 ### Data Location
 
 Your encrypted database is stored at:
-- **macOS**: `~/Library/Application Support/money/data.db`
-- **Linux**: `~/.local/share/money/data.db`
-- **Windows**: `C:\Users\<User>\AppData\Roaming\money\data.db`
+- **macOS**: `~/Library/Application Support/tally/data.db`
+- **Linux**: `~/.local/share/tally/data.db`
+- **Windows**: `C:\Users\<User>\AppData\Roaming\tally\data.db`
 
 You can change this location in Settings > Advanced.
 
@@ -113,7 +113,7 @@ You can change this location in Settings > Advanced.
 ### Project Structure
 
 ```
-money/
+tally/
 ├── src/                    # React frontend
 │   ├── components/         # UI components
 │   ├── pages/              # Page components
