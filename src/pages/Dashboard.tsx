@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -13,20 +13,50 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Header } from "@/components/layout/Header";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { CashFlowChart } from "@/components/charts/CashFlowChart";
+import { SpendingChart } from "@/components/charts/SpendingChart";
 import { useAccountStore } from "@/stores/useAccountStore";
 import { useTransactionStore } from "@/stores/useTransactionStore";
+import { getCashFlow, getSpendingByCategory } from "@/lib/tauri";
 import { formatMoney, formatRelativeDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import type { CashFlowData, SpendingByCategory } from "@/types";
 
 export function Dashboard() {
   const { accounts, fetchAccounts, getTotalAssets, getTotalLiabilities, getNetWorth } =
     useAccountStore();
   const { transactions, fetchTransactions } = useTransactionStore();
+  const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
+  const [spendingData, setSpendingData] = useState<SpendingByCategory[]>([]);
 
   useEffect(() => {
     fetchAccounts();
     fetchTransactions();
+    loadChartData();
   }, [fetchAccounts, fetchTransactions]);
+
+  const loadChartData = async () => {
+    try {
+      // Get last 6 months of data
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 5);
+      startDate.setDate(1);
+
+      const startStr = startDate.toISOString().split("T")[0] as string;
+      const endStr = endDate.toISOString().split("T")[0] as string;
+
+      const [cashFlow, spending] = await Promise.all([
+        getCashFlow(startStr, endStr, "month"),
+        getSpendingByCategory(startStr, endStr),
+      ]);
+
+      setCashFlowData(cashFlow);
+      setSpendingData(spending);
+    } catch (err) {
+      console.error("Failed to load chart data:", err);
+    }
+  };
 
   const totalAssets = getTotalAssets();
   const totalLiabilities = getTotalLiabilities();
@@ -94,6 +124,31 @@ export function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Assets minus liabilities
                 </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Cash Flow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[250px]">
+                  <CashFlowChart data={cashFlowData} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Spending by Category</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[250px]">
+                  <SpendingChart data={spendingData} />
+                </div>
               </CardContent>
             </Card>
           </div>
