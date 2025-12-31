@@ -29,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/Header";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useCategoryStore } from "@/stores/useCategoryStore";
@@ -194,15 +193,9 @@ export function Categories() {
               style={{ backgroundColor: category.color || "#6b7280" }}
             />
             <span className="font-medium truncate">{category.name}</span>
-            {category.isSystem && (
-              <Badge variant="secondary" className="text-xs shrink-0">System</Badge>
-            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Badge variant="outline" className="text-xs hidden sm:inline-flex">
-              {category.categoryType}
-            </Badge>
-            {!category.isSystem && (
+            {!category.isSystem ? (
               <>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreate(category.id)}>
                   <Plus className="h-4 w-4" />
@@ -214,6 +207,8 @@ export function Categories() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </>
+            ) : (
+              <span className="text-xs text-muted-foreground px-2">Built-in</span>
             )}
           </div>
         </div>
