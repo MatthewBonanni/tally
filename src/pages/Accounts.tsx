@@ -205,6 +205,13 @@ export function Accounts() {
                   <CardContent className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                     <CreditCard className="h-8 w-8 mb-2 opacity-50" />
                     <p>No liability accounts</p>
+                    <Button
+                      variant="link"
+                      className="mt-2"
+                      onClick={() => handleOpenDialog()}
+                    >
+                      Add your first account
+                    </Button>
                   </CardContent>
                 </Card>
               )}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -11,6 +12,7 @@ import {
   Trash2,
   Tags,
   Link2,
+  Upload,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,7 @@ import { cn } from "@/lib/utils";
 import type { Transaction } from "@/types";
 
 export function Transactions() {
+  const navigate = useNavigate();
   const {
     transactions,
     selectedIds,
@@ -166,10 +169,16 @@ export function Transactions() {
       <Header
         title="Transactions"
         actions={
-          <Button onClick={() => handleOpenDialog()}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Transaction
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/import")}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+            <Button onClick={() => handleOpenDialog()}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Transaction
+            </Button>
+          </div>
         }
       />
       <PageContainer>

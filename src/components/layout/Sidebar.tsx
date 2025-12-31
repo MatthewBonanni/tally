@@ -42,7 +42,6 @@ const navItems = [
   { path: "/", label: "Dashboard", icon: "LayoutDashboard" },
   { path: "/accounts", label: "Accounts", icon: "Wallet" },
   { path: "/transactions", label: "Transactions", icon: "ArrowLeftRight" },
-  { path: "/import", label: "Import", icon: "Upload" },
   { path: "/budgets", label: "Budgets", icon: "Target" },
   { path: "/goals", label: "Goals", icon: "Flag" },
   { path: "/reports", label: "Reports", icon: "BarChart3" },

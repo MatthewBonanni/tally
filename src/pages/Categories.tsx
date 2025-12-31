@@ -170,14 +170,14 @@ export function Categories() {
       <div key={category.id}>
         <div
           className={cn(
-            "flex items-center justify-between p-3 hover:bg-accent/50 rounded-lg transition-colors",
+            "flex items-center justify-between gap-2 p-3 hover:bg-accent/50 rounded-lg transition-colors",
             depth > 0 && "ml-6"
           )}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {hasChildren ? (
               <button
-                className="p-1 hover:bg-accent rounded"
+                className="p-1 hover:bg-accent rounded shrink-0"
                 onClick={() => toggleExpand(category.id)}
               >
                 {isExpanded ? (
@@ -187,30 +187,30 @@ export function Categories() {
                 )}
               </button>
             ) : (
-              <div className="w-6" />
+              <div className="w-6 shrink-0" />
             )}
             <div
-              className="h-4 w-4 rounded-full"
+              className="h-4 w-4 rounded-full shrink-0"
               style={{ backgroundColor: category.color || "#6b7280" }}
             />
-            <span className="font-medium">{category.name}</span>
+            <span className="font-medium truncate">{category.name}</span>
             {category.isSystem && (
-              <Badge variant="secondary" className="text-xs">System</Badge>
+              <Badge variant="secondary" className="text-xs shrink-0">System</Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
+          <div className="flex items-center gap-1 shrink-0">
+            <Badge variant="outline" className="text-xs hidden sm:inline-flex">
               {category.categoryType}
             </Badge>
             {!category.isSystem && (
               <>
-                <Button variant="ghost" size="icon" onClick={() => handleCreate(category.id)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreate(category.id)}>
                   <Plus className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleEdit(category)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(category)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(category)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(category)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </>
