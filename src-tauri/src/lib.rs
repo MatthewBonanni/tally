@@ -23,6 +23,7 @@ pub fn run() {
             commands::get_setting,
             commands::set_setting,
             commands::export_to_json,
+            commands::database_exists,
             commands::get_database_path,
             commands::set_database_path,
             commands::get_default_database_path,

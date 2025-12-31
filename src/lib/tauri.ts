@@ -29,6 +29,10 @@ export async function isUnlocked(): Promise<boolean> {
   return invoke("is_unlocked");
 }
 
+export async function databaseExists(): Promise<boolean> {
+  return invoke("database_exists");
+}
+
 // Account commands
 export async function listAccounts(): Promise<Account[]> {
   return invoke("list_accounts");

@@ -123,6 +123,12 @@ pub fn export_to_json(db: State<'_, Mutex<Database>>) -> Result<String> {
 }
 
 #[tauri::command]
+pub fn database_exists(db: State<'_, Mutex<Database>>) -> bool {
+    let database = db.lock().unwrap();
+    database.get_db_path().exists()
+}
+
+#[tauri::command]
 pub fn get_database_path(db: State<'_, Mutex<Database>>) -> String {
     let database = db.lock().unwrap();
     database.get_db_path().to_string_lossy().to_string()
