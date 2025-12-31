@@ -18,15 +18,16 @@ import { SpendingChart } from "@/components/charts/SpendingChart";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { useAccountStore } from "@/stores/useAccountStore";
 import { useTransactionStore } from "@/stores/useTransactionStore";
-import { getCashFlow, getSpendingByCategory, getNetWorthHistory } from "@/lib/tauri";
 import { formatMoney, formatRelativeDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { useCategoryStore } from "@/stores/useCategoryStore";
 import type { CashFlowData, SpendingByCategory, NetWorthSnapshot } from "@/types";
 
 export function Dashboard() {
   const { accounts, fetchAccounts, getTotalAssets, getTotalLiabilities, getNetWorth } =
     useAccountStore();
   const { transactions, fetchTransactions } = useTransactionStore();
+  const { categories, fetchCategories } = useCategoryStore();
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
   const [spendingData, setSpendingData] = useState<SpendingByCategory[]>([]);
   const [netWorthHistory, setNetWorthHistory] = useState<NetWorthSnapshot[]>([]);
@@ -34,33 +35,119 @@ export function Dashboard() {
   useEffect(() => {
     fetchAccounts();
     fetchTransactions();
-    loadChartData();
-  }, [fetchAccounts, fetchTransactions]);
+    fetchCategories();
+  }, [fetchAccounts, fetchTransactions, fetchCategories]);
 
-  const loadChartData = async () => {
-    try {
-      // Get last 6 months of data
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 5);
-      startDate.setDate(1);
+  // Compute chart data from transactions
+  useEffect(() => {
+    if (transactions.length === 0) return;
 
-      const startStr = startDate.toISOString().split("T")[0] as string;
-      const endStr = endDate.toISOString().split("T")[0] as string;
-
-      const [cashFlow, spending, netWorth] = await Promise.all([
-        getCashFlow(startStr, endStr, "month"),
-        getSpendingByCategory(startStr, endStr),
-        getNetWorthHistory(startStr, endStr),
-      ]);
-
-      setCashFlowData(cashFlow);
-      setSpendingData(spending);
-      setNetWorthHistory(netWorth);
-    } catch (err) {
-      console.error("Failed to load chart data:", err);
+    // Get last 6 months
+    const now = new Date();
+    const months: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(d.toISOString().slice(0, 7)); // "YYYY-MM"
     }
-  };
+
+    // Compute cash flow by month
+    const cashFlowMap = new Map<string, { income: number; expenses: number }>();
+    months.forEach((m) => cashFlowMap.set(m, { income: 0, expenses: 0 }));
+
+    transactions.forEach((tx) => {
+      const month = tx.date.slice(0, 7);
+      if (cashFlowMap.has(month)) {
+        const entry = cashFlowMap.get(month)!;
+        if (tx.amount >= 0) {
+          entry.income += tx.amount;
+        } else {
+          entry.expenses += tx.amount;
+        }
+      }
+    });
+
+    const cashFlow: CashFlowData[] = months.map((period) => {
+      const entry = cashFlowMap.get(period)!;
+      return {
+        period,
+        income: entry.income,
+        expenses: entry.expenses,
+        net: entry.income + entry.expenses,
+      };
+    });
+    setCashFlowData(cashFlow);
+
+    // Compute spending by category (last 6 months)
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+      .toISOString()
+      .split("T")[0] as string;
+    const spendingMap = new Map<string, number>();
+
+    transactions
+      .filter((tx) => tx.date >= sixMonthsAgo && tx.amount < 0)
+      .forEach((tx) => {
+        const catId = tx.categoryId || "uncategorized";
+        spendingMap.set(catId, (spendingMap.get(catId) || 0) + Math.abs(tx.amount));
+      });
+
+    const totalSpending = Array.from(spendingMap.values()).reduce((a, b) => a + b, 0);
+    const spending: SpendingByCategory[] = Array.from(spendingMap.entries())
+      .map(([categoryId, amount]) => {
+        const cat = categories.find((c) => c.id === categoryId);
+        return {
+          categoryId,
+          categoryName: cat?.name || "Uncategorized",
+          amount,
+          percentage: totalSpending > 0 ? (amount / totalSpending) * 100 : 0,
+          color: cat?.color || null,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
+    setSpendingData(spending);
+
+    // Compute net worth history by month
+    // Start with current balances and work backwards
+    const currentNetWorth = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
+    const currentAssets = accounts
+      .filter((a) => ["checking", "savings", "investment", "cash"].includes(a.accountType))
+      .reduce((sum, a) => sum + a.currentBalance, 0);
+    const currentLiabilities = accounts
+      .filter((a) => ["credit_card", "loan"].includes(a.accountType))
+      .reduce((sum, a) => sum + Math.abs(a.currentBalance), 0);
+
+    // Group transactions by month to calculate deltas
+    const monthlyDeltas = new Map<string, number>();
+    transactions.forEach((tx) => {
+      const month = tx.date.slice(0, 7);
+      monthlyDeltas.set(month, (monthlyDeltas.get(month) || 0) + tx.amount);
+    });
+
+    // Build history working backwards from current
+    const netWorthHistoryData: NetWorthSnapshot[] = [];
+    let runningNetWorth = currentNetWorth;
+
+    // Start from current month and go back
+    for (let i = 0; i <= 5; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const month = d.toISOString().slice(0, 7);
+      const snapshotDate = `${month}-01`;
+
+      netWorthHistoryData.unshift({
+        id: month,
+        snapshotDate,
+        totalAssets: currentAssets, // Simplified - would need per-account tracking for accuracy
+        totalLiabilities: currentLiabilities,
+        netWorth: runningNetWorth,
+        createdAt: snapshotDate,
+      });
+
+      // Subtract this month's transactions to get previous month's balance
+      const delta = monthlyDeltas.get(month) || 0;
+      runningNetWorth -= delta;
+    }
+
+    setNetWorthHistory(netWorthHistoryData);
+  }, [transactions, accounts, categories]);
 
   const totalAssets = getTotalAssets();
   const totalLiabilities = getTotalLiabilities();
