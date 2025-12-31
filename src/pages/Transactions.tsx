@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -44,6 +43,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Header } from "@/components/layout/Header";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { ImportDialog } from "@/components/import/ImportDialog";
 import { useTransactionStore } from "@/stores/useTransactionStore";
 import { useAccountStore } from "@/stores/useAccountStore";
 import { useCategoryStore } from "@/stores/useCategoryStore";
@@ -52,7 +52,6 @@ import { cn } from "@/lib/utils";
 import type { Transaction } from "@/types";
 
 export function Transactions() {
-  const navigate = useNavigate();
   const {
     transactions,
     selectedIds,
@@ -70,6 +69,7 @@ export function Transactions() {
   const { categories, fetchCategories } = useCategoryStore();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [formData, setFormData] = useState({
     accountId: "",
@@ -170,7 +170,7 @@ export function Transactions() {
         title="Transactions"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/import")}>
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
               <Upload className="h-4 w-4 mr-2" />
               Import
             </Button>
@@ -538,6 +538,12 @@ export function Transactions() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ImportDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        onComplete={() => fetchTransactions()}
+      />
     </>
   );
 }
