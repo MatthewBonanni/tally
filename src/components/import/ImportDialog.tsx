@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Upload,
   FileSpreadsheet,
@@ -6,6 +7,7 @@ import {
   ChevronLeft,
   Check,
   AlertCircle,
+  Wallet,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,7 @@ interface ImportDialogProps {
 }
 
 export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportDialogProps) {
+  const navigate = useNavigate();
   const { accounts, fetchAccounts } = useAccountStore();
   const [step, setStep] = useState<Step>("upload");
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -361,18 +364,38 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
               <div className="space-y-2">
                 <Label>Import to Account</Label>
-                <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {accounts.length === 0 ? (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+                    <Wallet className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No accounts yet</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Create an account first to import transactions</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        onOpenChange(false);
+                        navigate("/accounts");
+                      }}
+                    >
+                      Add Account
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={accountId} onValueChange={setAccountId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -584,18 +607,38 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
               <div className="space-y-2">
                 <Label>Import to Account</Label>
-                <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {accounts.length === 0 ? (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+                    <Wallet className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No accounts yet</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Create an account first to import transactions</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        onOpenChange(false);
+                        navigate("/accounts");
+                      }}
+                    >
+                      Add Account
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={accountId} onValueChange={setAccountId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div>
