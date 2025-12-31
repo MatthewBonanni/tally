@@ -263,6 +263,7 @@ export interface ParsedTransaction {
 export interface ImportResult {
   imported: number;
   skipped: number;
+  categorized: number;
   batchId: string;
 }
 

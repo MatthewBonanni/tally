@@ -73,7 +73,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
   const [useSeparateColumns, setUseSeparateColumns] = useState(false);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; categorized: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -242,7 +242,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         }));
 
       const result = await importTransactions(accountId, transactionsToImport);
-      setImportResult({ imported: result.imported, skipped: result.skipped });
+      setImportResult({ imported: result.imported, skipped: result.skipped, categorized: result.categorized });
       setStep("complete");
     } catch (err) {
       setError(String(err));
@@ -727,6 +727,11 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                 Successfully imported {importResult.imported} transactions
                 {importResult.skipped > 0 && ` (${importResult.skipped} duplicates skipped)`}
               </p>
+              {importResult.categorized > 0 && (
+                <p className="text-sm text-green-600 mt-2">
+                  {importResult.categorized} transaction{importResult.categorized === 1 ? " was" : "s were"} automatically categorized
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -60,6 +60,7 @@ export function Transactions() {
     createTransaction,
     updateTransaction,
     deleteTransactions,
+    bulkCategorize,
     selectTransaction,
     selectAll,
     clearSelection,
@@ -70,7 +71,9 @@ export function Transactions() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isCategorizeDialogOpen, setIsCategorizeDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [formData, setFormData] = useState({
     accountId: "",
     date: getTodayString(),
@@ -156,6 +159,14 @@ export function Transactions() {
     if (confirm(`Delete ${selectedIds.size} transaction(s)?`)) {
       await deleteTransactions(Array.from(selectedIds));
     }
+  };
+
+  const handleBulkCategorize = async () => {
+    if (selectedIds.size === 0 || !selectedCategoryId) return;
+    await bulkCategorize(Array.from(selectedIds), selectedCategoryId);
+    setIsCategorizeDialogOpen(false);
+    setSelectedCategoryId("");
+    clearSelection();
   };
 
   const getAccountName = (id: string) =>
@@ -248,7 +259,7 @@ export function Transactions() {
                   <Button variant="outline" size="sm" onClick={clearSelection}>
                     Clear
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => setIsCategorizeDialogOpen(true)}>
                     <Tags className="h-4 w-4 mr-2" />
                     Categorize
                   </Button>
@@ -550,6 +561,47 @@ export function Transactions() {
         onOpenChange={setIsImportDialogOpen}
         onComplete={() => fetchTransactions()}
       />
+
+      {/* Bulk Categorize Dialog */}
+      <Dialog open={isCategorizeDialogOpen} onOpenChange={setIsCategorizeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Categorize Transactions</DialogTitle>
+            <DialogDescription>
+              Select a category for {selectedIds.size} selected transaction{selectedIds.size === 1 ? "" : "s"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select
+                value={selectedCategoryId || "none"}
+                onValueChange={(value) => setSelectedCategoryId(value === "none" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Uncategorized</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCategorizeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkCategorize} disabled={!selectedCategoryId}>
+              Apply Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

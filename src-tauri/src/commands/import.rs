@@ -36,6 +36,8 @@ pub fn import_transactions(
     let mut imported = 0;
     let mut skipped = 0;
 
+    let mut imported_ids: Vec<String> = Vec::new();
+
     for tx in transactions {
         let date = tx["date"].as_str().unwrap_or("");
         let amount = tx["amount"].as_i64().unwrap_or(0);
@@ -79,17 +81,229 @@ pub fn import_transactions(
                 now,
             ],
         )?;
+        imported_ids.push(id);
         imported += 1;
     }
 
     // Update account balance
     update_account_balance(conn, &account_id)?;
 
+    // Auto-categorize imported transactions using rules
+    let categorized = apply_category_rules_internal(conn, Some(imported_ids))?;
+
     Ok(ImportResult {
         imported,
         skipped,
+        categorized,
         batch_id,
     })
+}
+
+/// Internal function to apply category rules to transactions
+/// This is called automatically after import and can also be exposed via commands
+fn apply_category_rules_internal(
+    conn: &rusqlite::Connection,
+    transaction_ids: Option<Vec<String>>,
+) -> Result<i32> {
+    // Get all active rules ordered by priority
+    let mut rules_stmt = conn.prepare(
+        "SELECT id, category_id, rule_type, pattern, amount_min, amount_max, account_id
+         FROM category_rules
+         WHERE is_active = 1
+         ORDER BY priority DESC"
+    )?;
+
+    let rules: Vec<(String, String, String, String, Option<i64>, Option<i64>, Option<String>)> = rules_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<i64>>(4)?,
+                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if rules.is_empty() {
+        return Ok(0);
+    }
+
+    // Get transactions to categorize
+    let tx_query = if let Some(ref ids) = transaction_ids {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        format!(
+            "SELECT id, account_id, payee, amount FROM transactions
+             WHERE id IN ({}) AND category_id IS NULL AND deleted_at IS NULL",
+            placeholders.join(", ")
+        )
+    } else {
+        "SELECT id, account_id, payee, amount FROM transactions
+         WHERE category_id IS NULL AND deleted_at IS NULL".to_string()
+    };
+
+    let mut tx_stmt = conn.prepare(&tx_query)?;
+
+    let transactions: Vec<(String, String, Option<String>, i64)> = if let Some(ref ids) = transaction_ids {
+        tx_stmt
+            .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })?
+            .filter_map(|r| r.ok())
+            .collect()
+    } else {
+        tx_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut categorized_count = 0;
+
+    for (tx_id, tx_account_id, tx_payee, tx_amount) in transactions {
+        for (_rule_id, category_id, rule_type, pattern, amount_min, amount_max, rule_account_id) in &rules {
+            // Check account filter
+            if let Some(acc_id) = rule_account_id {
+                if acc_id != &tx_account_id {
+                    continue;
+                }
+            }
+
+            // Check amount range
+            if let Some(min) = amount_min {
+                if tx_amount < *min {
+                    continue;
+                }
+            }
+            if let Some(max) = amount_max {
+                if tx_amount > *max {
+                    continue;
+                }
+            }
+
+            // Check pattern match
+            let matches = match rule_type.as_str() {
+                "payee_contains" => {
+                    if let Some(ref payee) = tx_payee {
+                        payee.to_lowercase().contains(&pattern.to_lowercase())
+                    } else {
+                        false
+                    }
+                }
+                "payee_exact" => {
+                    if let Some(ref payee) = tx_payee {
+                        payee.to_lowercase() == pattern.to_lowercase()
+                    } else {
+                        false
+                    }
+                }
+                "payee_starts_with" => {
+                    if let Some(ref payee) = tx_payee {
+                        payee.to_lowercase().starts_with(&pattern.to_lowercase())
+                    } else {
+                        false
+                    }
+                }
+                "payee_regex" => {
+                    if let Some(ref payee) = tx_payee {
+                        regex::Regex::new(pattern)
+                            .map(|re| re.is_match(payee))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            };
+
+            if matches {
+                conn.execute(
+                    "UPDATE transactions SET category_id = ?1, updated_at = ?2 WHERE id = ?3",
+                    rusqlite::params![category_id, now, tx_id],
+                )?;
+                categorized_count += 1;
+                break; // Use first matching rule
+            }
+        }
+    }
+
+    // Second pass: learn from existing transactions with same payee
+    // Get remaining uncategorized transactions
+    let uncategorized_query = if let Some(ref ids) = transaction_ids {
+        if ids.is_empty() {
+            return Ok(categorized_count);
+        }
+        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        format!(
+            "SELECT id, payee FROM transactions
+             WHERE id IN ({}) AND category_id IS NULL AND payee IS NOT NULL AND deleted_at IS NULL",
+            placeholders.join(", ")
+        )
+    } else {
+        "SELECT id, payee FROM transactions
+         WHERE category_id IS NULL AND payee IS NOT NULL AND deleted_at IS NULL".to_string()
+    };
+
+    let mut uncategorized_stmt = conn.prepare(&uncategorized_query)?;
+
+    let uncategorized: Vec<(String, String)> = if let Some(ref ids) = transaction_ids {
+        uncategorized_stmt
+            .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect()
+    } else {
+        uncategorized_stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+
+    // For each uncategorized transaction, find a previous transaction with same payee that has a category
+    for (tx_id, payee) in uncategorized {
+        let existing_category: Option<String> = conn
+            .query_row(
+                "SELECT category_id FROM transactions
+                 WHERE payee = ?1 AND category_id IS NOT NULL AND deleted_at IS NULL AND id != ?2
+                 ORDER BY date DESC
+                 LIMIT 1",
+                rusqlite::params![payee, tx_id],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(category_id) = existing_category {
+            conn.execute(
+                "UPDATE transactions SET category_id = ?1, updated_at = ?2 WHERE id = ?3",
+                rusqlite::params![category_id, now, tx_id],
+            )?;
+            categorized_count += 1;
+        }
+    }
+
+    Ok(categorized_count)
 }
 
 fn update_account_balance(conn: &rusqlite::Connection, account_id: &str) -> Result<()> {
@@ -113,6 +327,7 @@ fn update_account_balance(conn: &rusqlite::Connection, account_id: &str) -> Resu
 pub struct ImportResult {
     pub imported: usize,
     pub skipped: usize,
+    pub categorized: i32,
     pub batch_id: String,
 }
 
