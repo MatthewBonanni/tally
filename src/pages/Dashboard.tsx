@@ -15,12 +15,13 @@ import { Header } from "@/components/layout/Header";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { CashFlowChart } from "@/components/charts/CashFlowChart";
 import { SpendingChart } from "@/components/charts/SpendingChart";
+import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { useAccountStore } from "@/stores/useAccountStore";
 import { useTransactionStore } from "@/stores/useTransactionStore";
-import { getCashFlow, getSpendingByCategory } from "@/lib/tauri";
+import { getCashFlow, getSpendingByCategory, getNetWorthHistory } from "@/lib/tauri";
 import { formatMoney, formatRelativeDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import type { CashFlowData, SpendingByCategory } from "@/types";
+import type { CashFlowData, SpendingByCategory, NetWorthSnapshot } from "@/types";
 
 export function Dashboard() {
   const { accounts, fetchAccounts, getTotalAssets, getTotalLiabilities, getNetWorth } =
@@ -28,6 +29,7 @@ export function Dashboard() {
   const { transactions, fetchTransactions } = useTransactionStore();
   const [cashFlowData, setCashFlowData] = useState<CashFlowData[]>([]);
   const [spendingData, setSpendingData] = useState<SpendingByCategory[]>([]);
+  const [netWorthHistory, setNetWorthHistory] = useState<NetWorthSnapshot[]>([]);
 
   useEffect(() => {
     fetchAccounts();
@@ -46,13 +48,15 @@ export function Dashboard() {
       const startStr = startDate.toISOString().split("T")[0] as string;
       const endStr = endDate.toISOString().split("T")[0] as string;
 
-      const [cashFlow, spending] = await Promise.all([
+      const [cashFlow, spending, netWorth] = await Promise.all([
         getCashFlow(startStr, endStr, "month"),
         getSpendingByCategory(startStr, endStr),
+        getNetWorthHistory(startStr, endStr),
       ]);
 
       setCashFlowData(cashFlow);
       setSpendingData(spending);
+      setNetWorthHistory(netWorth);
     } catch (err) {
       console.error("Failed to load chart data:", err);
     }
@@ -127,6 +131,18 @@ export function Dashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Net Worth Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Net Worth Over Time</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[250px]">
+                <NetWorthChart data={netWorthHistory} />
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Charts */}
           <div className="grid gap-6 lg:grid-cols-2">
