@@ -295,13 +295,19 @@ export function Transactions() {
                     <p className="text-sm">
                       Add transactions manually or import from your bank
                     </p>
-                    <Button
-                      className="mt-4"
-                      onClick={() => handleOpenDialog()}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Transaction
-                    </Button>
+                    <div className="flex gap-2 justify-center mt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsImportDialogOpen(true)}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import
+                      </Button>
+                      <Button onClick={() => handleOpenDialog()}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Transaction
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   transactions.map((tx) => (
