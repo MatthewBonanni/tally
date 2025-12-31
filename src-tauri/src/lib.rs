@@ -57,6 +57,8 @@ pub fn run() {
             commands::preview_csv_file,
             commands::parse_csv_file,
             commands::import_transactions,
+            commands::preview_boa_file,
+            commands::parse_boa_file,
             // Budgets
             commands::list_budgets,
             commands::get_budget_summary,

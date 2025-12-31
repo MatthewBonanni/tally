@@ -28,14 +28,19 @@ import {
   previewCsvFile,
   parseCsvFile,
   importTransactions,
+  previewBoaFile,
+  parseBoaFile,
   type CsvPreview,
   type ColumnMapping,
   type ParsedTransaction,
+  type BoaPreview,
 } from "@/lib/tauri";
 import { formatMoney } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 type Step = "upload" | "mapping" | "preview" | "complete";
+
+type FileType = "csv" | "boa";
 
 export function Import() {
   const navigate = useNavigate();
@@ -43,8 +48,10 @@ export function Import() {
   const [step, setStep] = useState<Step>("upload");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<FileType>("csv");
   const [accountId, setAccountId] = useState<string>("");
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
+  const [boaPreview, setBoaPreview] = useState<BoaPreview | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     dateColumn: 0,
     amountColumn: 1,
@@ -70,14 +77,40 @@ export function Import() {
     try {
       const selected = await open({
         multiple: false,
-        filters: [{ name: "CSV", extensions: ["csv"] }],
+        filters: [
+          { name: "Bank Statements", extensions: ["csv", "txt"] },
+        ],
       });
 
       if (selected && typeof selected === "string") {
         setFilePath(selected);
-        setFileName(selected.split("/").pop() || selected);
+        const name = selected.split("/").pop() || selected;
+        setFileName(name);
         setError(null);
 
+        // Detect file type based on extension
+        const isTxtFile = name.toLowerCase().endsWith(".txt");
+
+        if (isTxtFile) {
+          // Try Bank of America parser for .txt files
+          try {
+            const preview = await previewBoaFile(selected);
+            if (preview.transactions.length > 0) {
+              setFileType("boa");
+              setBoaPreview(preview);
+              setCsvPreview(null);
+              // Skip mapping step for BoA files - go to account selection in preview
+              setStep("mapping"); // Still need to select account
+              return;
+            }
+          } catch {
+            // Fall back to CSV if BoA parsing fails
+          }
+        }
+
+        // Standard CSV parsing
+        setFileType("csv");
+        setBoaPreview(null);
         const preview = await previewCsvFile(selected);
         setCsvPreview(preview);
 
@@ -126,29 +159,45 @@ export function Import() {
     setError(null);
 
     try {
-      const mapping: ColumnMapping = useSeparateColumns
-        ? {
-            ...columnMapping,
-            amountColumn: 0, // Not used when separate columns
-            debitColumn: columnMapping.debitColumn,
-            creditColumn: columnMapping.creditColumn,
-          }
-        : {
-            ...columnMapping,
-            debitColumn: undefined,
-            creditColumn: undefined,
-          };
+      if (fileType === "boa") {
+        // Parse Bank of America file
+        const boaTx = await parseBoaFile(filePath);
+        const transactions: ParsedTransaction[] = boaTx.map((tx) => ({
+          date: tx.date,
+          amount: tx.amount,
+          payee: tx.payee,
+          memo: tx.memo,
+          rawData: {},
+        }));
+        setParsedTransactions(transactions);
+        setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+        setStep("preview");
+      } else {
+        // Parse CSV file
+        const mapping: ColumnMapping = useSeparateColumns
+          ? {
+              ...columnMapping,
+              amountColumn: 0, // Not used when separate columns
+              debitColumn: columnMapping.debitColumn,
+              creditColumn: columnMapping.creditColumn,
+            }
+          : {
+              ...columnMapping,
+              debitColumn: undefined,
+              creditColumn: undefined,
+            };
 
-      const transactions = await parseCsvFile(filePath, mapping);
-      setParsedTransactions(transactions);
-      setSelectedTransactions(new Set(transactions.map((_, i) => i)));
-      setStep("preview");
+        const transactions = await parseCsvFile(filePath, mapping);
+        setParsedTransactions(transactions);
+        setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+        setStep("preview");
+      }
     } catch (err) {
       setError(String(err));
     } finally {
       setLoading(false);
     }
-  }, [filePath, columnMapping, useSeparateColumns]);
+  }, [filePath, fileType, columnMapping, useSeparateColumns]);
 
   const handleImport = useCallback(async () => {
     if (!accountId) {
@@ -252,7 +301,7 @@ export function Import() {
             <CardHeader>
               <CardTitle>Select a File</CardTitle>
               <CardDescription>
-                Choose a CSV file exported from your bank
+                Choose a CSV or TXT statement file exported from your bank
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -261,9 +310,9 @@ export function Import() {
                 onClick={handleSelectFile}
               >
                 <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg font-medium">Click to select a CSV file</p>
+                <p className="text-lg font-medium">Click to select a file</p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Supports most bank export formats
+                  Supports CSV files and Bank of America TXT statements
                 </p>
               </div>
             </CardContent>
@@ -489,6 +538,102 @@ export function Import() {
                     </table>
                   </ScrollArea>
                 </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-between pt-4">
+                <Button variant="outline" onClick={() => setStep("upload")}>
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+                <Button onClick={handleParseFile} disabled={loading || !accountId}>
+                  {loading ? "Parsing..." : "Continue"}
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: BoA File - Simplified account selection */}
+        {step === "mapping" && fileType === "boa" && boaPreview && (
+          <Card className="max-w-4xl mx-auto">
+            <CardHeader>
+              <CardTitle>Bank of America Statement</CardTitle>
+              <CardDescription>
+                {boaPreview.totalRows} transactions detected
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* File Info */}
+              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">{fileName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Bank of America statement format detected
+                  </p>
+                </div>
+              </div>
+
+              {/* Balance Summary */}
+              {(boaPreview.beginningBalance || boaPreview.endingBalance) && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {boaPreview.beginningBalance && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">Beginning Balance</p>
+                      <p className="text-lg font-semibold">{formatMoney(boaPreview.beginningBalance)}</p>
+                    </div>
+                  )}
+                  {boaPreview.endingBalance && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground">Ending Balance</p>
+                      <p className="text-lg font-semibold">{formatMoney(boaPreview.endingBalance)}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Account Selection */}
+              <div className="space-y-2">
+                <Label>Import to Account</Label>
+                <Select value={accountId} onValueChange={setAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Transaction Preview */}
+              <div>
+                <Label className="mb-2 block">Preview (first 10 transactions)</Label>
+                <ScrollArea className="h-[200px] border rounded-lg">
+                  <div className="divide-y">
+                    {boaPreview.transactions.slice(0, 10).map((tx, i) => (
+                      <div key={i} className="flex items-center justify-between p-3">
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="font-medium truncate">{tx.description}</p>
+                          <p className="text-sm text-muted-foreground">{tx.date}</p>
+                        </div>
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
+                          )}
+                        >
+                          {formatMoney(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
 
               {/* Actions */}

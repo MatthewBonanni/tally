@@ -290,6 +290,34 @@ export async function importTransactions(
   return invoke("import_transactions", { accountId, transactions });
 }
 
+// Bank of America text file parser
+export interface BoaTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  runningBalance: number | null;
+}
+
+export interface BoaPreview {
+  transactions: BoaTransaction[];
+  totalRows: number;
+  beginningBalance: number | null;
+  endingBalance: number | null;
+}
+
+export async function previewBoaFile(filePath: string): Promise<BoaPreview> {
+  return invoke("preview_boa_file", { filePath });
+}
+
+export async function parseBoaFile(filePath: string): Promise<Array<{
+  date: string;
+  amount: number;
+  payee: string;
+  memo: string;
+}>> {
+  return invoke("parse_boa_file", { filePath });
+}
+
 // Export commands
 export async function exportToCsv(filters: Partial<TransactionFilters>): Promise<string> {
   return invoke("export_to_csv", { filters });

@@ -1,5 +1,6 @@
 use crate::db::Database;
 use crate::error::Result;
+use crate::import::boa_parser::{self, BoaPreview};
 use crate::import::csv_parser::{self, ColumnMapping, CsvPreview, ParsedTransaction};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -113,4 +114,32 @@ pub struct ImportResult {
     pub imported: usize,
     pub skipped: usize,
     pub batch_id: String,
+}
+
+// Bank of America text file parser
+#[tauri::command]
+pub fn preview_boa_file(file_path: String) -> Result<BoaPreview> {
+    let path = PathBuf::from(&file_path);
+    boa_parser::preview_boa(&path, 20)
+}
+
+#[tauri::command]
+pub fn parse_boa_file(file_path: String) -> Result<Vec<serde_json::Value>> {
+    let path = PathBuf::from(&file_path);
+    let transactions = boa_parser::parse_boa(&path)?;
+
+    // Convert to JSON values for the frontend
+    let result: Vec<serde_json::Value> = transactions
+        .into_iter()
+        .map(|tx| {
+            serde_json::json!({
+                "date": tx.date,
+                "amount": tx.amount,
+                "payee": tx.description,
+                "memo": tx.description,
+            })
+        })
+        .collect();
+
+    Ok(result)
 }
