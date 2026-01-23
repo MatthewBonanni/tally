@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Moon, Sun, Lock, FileText, FileJson, FolderOpen, RotateCcw, AlertTriangle } from "lucide-react";
+import { Moon, Sun, Lock, FileText, FileJson, FolderOpen, RotateCcw, AlertTriangle, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import { useAppStore } from "@/stores/useAppStore";
 import * as api from "@/lib/tauri";
 
 export function Settings() {
-  const { theme, setTheme } = useAppStore();
+  const { theme, setTheme, setUnlocked } = useAppStore();
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [isDbPathDialogOpen, setIsDbPathDialogOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -36,6 +36,11 @@ export function Settings() {
   const [newDbPath, setNewDbPath] = useState<string>("");
   const [dbPathError, setDbPathError] = useState<string | null>(null);
   const [isSavingDbPath, setIsSavingDbPath] = useState(false);
+
+  // Delete database state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [showFinalDeleteConfirm, setShowFinalDeleteConfirm] = useState(false);
 
   useEffect(() => {
     loadDbPaths();
@@ -152,6 +157,16 @@ export function Settings() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("CSV export failed:", err);
+    }
+  };
+
+  const handleDeleteDatabase = async () => {
+    try {
+      await api.deleteDatabase();
+      // Lock the app to return to unlock screen
+      setUnlocked(false);
+    } catch (err) {
+      console.error("Delete database failed:", err);
     }
   };
 
@@ -289,6 +304,33 @@ export function Settings() {
                     Change
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="text-destructive">Danger Zone</CardTitle>
+              <CardDescription>
+                Irreversible actions that affect all your data
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Delete All Data</p>
+                  <p className="text-sm text-muted-foreground">
+                    Permanently delete your database and start fresh
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -445,6 +487,103 @@ export function Settings() {
             </Button>
             <Button onClick={handleSaveDbPath} disabled={isSavingDbPath}>
               {isSavingDbPath ? "Saving..." : "Save & Restart"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* First Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete All Data?
+            </DialogTitle>
+            <DialogDescription>
+              This action is <strong className="text-destructive">permanent and irreversible</strong>. All your accounts, transactions, budgets, and goals will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4 text-sm">
+              <p className="font-medium text-destructive mb-2">To confirm, type DELETE below:</p>
+              <Input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Type DELETE to confirm"
+                className="font-mono"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setDeleteConfirmText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteConfirmText !== "DELETE"}
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setShowFinalDeleteConfirm(true);
+              }}
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Final Delete Confirmation Dialog */}
+      <Dialog open={showFinalDeleteConfirm} onOpenChange={setShowFinalDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Final Confirmation
+            </DialogTitle>
+            <DialogDescription>
+              Are you absolutely sure? This is your last chance to cancel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4 text-sm space-y-2">
+            <p className="font-semibold text-destructive">The following will be permanently deleted:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1">
+              <li>All accounts and balances</li>
+              <li>All transactions and history</li>
+              <li>All budgets and goals</li>
+              <li>All categories and rules</li>
+              <li>All settings and preferences</li>
+            </ul>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowFinalDeleteConfirm(false);
+                setDeleteConfirmText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleDeleteDatabase}
+            >
+              Yes, Delete Everything
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -353,3 +353,7 @@ export async function getDefaultDatabasePath(): Promise<string> {
 export async function setDatabasePath(path: string | null): Promise<string> {
   return invoke("set_database_path", { path });
 }
+
+export async function deleteDatabase(): Promise<void> {
+  return invoke("delete_database");
+}

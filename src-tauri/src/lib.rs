@@ -27,6 +27,7 @@ pub fn run() {
             commands::get_database_path,
             commands::set_database_path,
             commands::get_default_database_path,
+            commands::delete_database,
             // Accounts
             commands::list_accounts,
             commands::get_account,

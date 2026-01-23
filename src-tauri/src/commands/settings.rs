@@ -155,3 +155,9 @@ pub fn set_database_path(
 
     Ok(database.get_db_path().to_string_lossy().to_string())
 }
+
+#[tauri::command]
+pub fn delete_database(db: State<'_, Mutex<Database>>) -> Result<()> {
+    let mut database = db.lock().unwrap();
+    database.delete_database()
+}

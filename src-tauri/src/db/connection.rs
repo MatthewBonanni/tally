@@ -91,6 +91,18 @@ impl Database {
         self.conn.as_ref().ok_or(AppError::NotUnlocked)
     }
 
+    pub fn delete_database(&mut self) -> Result<()> {
+        // Close the connection first
+        self.conn = None;
+
+        // Delete the database file if it exists
+        if self.db_path.exists() {
+            std::fs::remove_file(&self.db_path)?;
+        }
+
+        Ok(())
+    }
+
     fn run_migrations(&self, conn: &Connection) -> Result<()> {
         // Create tables if they don't exist
         conn.execute_batch(include_str!("../../migrations/001_initial_schema.sql"))?;
