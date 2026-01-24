@@ -1,18 +1,31 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { Dashboard } from "@/pages/Dashboard";
-import { Accounts } from "@/pages/Accounts";
-import { AccountDetail } from "@/pages/AccountDetail";
-import { Transactions } from "@/pages/Transactions";
-import { Import } from "@/pages/Import";
-import { Reports } from "@/pages/Reports";
-import { Budgets } from "@/pages/Budgets";
-import { Goals } from "@/pages/Goals";
-import { Categories } from "@/pages/Categories";
-import { Recurring } from "@/pages/Recurring";
-import { Investments } from "@/pages/Investments";
-import { Rules } from "@/pages/Rules";
-import { Settings } from "@/pages/Settings";
+import { PageSkeleton } from "@/components/layout/PageSkeleton";
+
+// Lazy load pages for better code splitting and faster initial navigation
+const Dashboard = lazy(() => import("@/pages/Dashboard").then(m => ({ default: m.Dashboard })));
+const Accounts = lazy(() => import("@/pages/Accounts").then(m => ({ default: m.Accounts })));
+const AccountDetail = lazy(() => import("@/pages/AccountDetail").then(m => ({ default: m.AccountDetail })));
+const Transactions = lazy(() => import("@/pages/Transactions").then(m => ({ default: m.Transactions })));
+const Import = lazy(() => import("@/pages/Import").then(m => ({ default: m.Import })));
+const Reports = lazy(() => import("@/pages/Reports").then(m => ({ default: m.Reports })));
+const Budgets = lazy(() => import("@/pages/Budgets").then(m => ({ default: m.Budgets })));
+const Goals = lazy(() => import("@/pages/Goals").then(m => ({ default: m.Goals })));
+const Categories = lazy(() => import("@/pages/Categories").then(m => ({ default: m.Categories })));
+const Recurring = lazy(() => import("@/pages/Recurring").then(m => ({ default: m.Recurring })));
+const Investments = lazy(() => import("@/pages/Investments").then(m => ({ default: m.Investments })));
+const Rules = lazy(() => import("@/pages/Rules").then(m => ({ default: m.Rules })));
+const Settings = lazy(() => import("@/pages/Settings").then(m => ({ default: m.Settings })));
+
+// Wrap component in Suspense with loading skeleton
+function withSuspense(Component: React.LazyExoticComponent<React.ComponentType>) {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Component />
+    </Suspense>
+  );
+}
 
 export const router = createBrowserRouter([
   {
@@ -21,55 +34,55 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Dashboard />,
+        element: withSuspense(Dashboard),
       },
       {
         path: "accounts",
-        element: <Accounts />,
+        element: withSuspense(Accounts),
       },
       {
         path: "accounts/:id",
-        element: <AccountDetail />,
+        element: withSuspense(AccountDetail),
       },
       {
         path: "transactions",
-        element: <Transactions />,
+        element: withSuspense(Transactions),
       },
       {
         path: "import",
-        element: <Import />,
+        element: withSuspense(Import),
       },
       {
         path: "budgets",
-        element: <Budgets />,
+        element: withSuspense(Budgets),
       },
       {
         path: "goals",
-        element: <Goals />,
+        element: withSuspense(Goals),
       },
       {
         path: "reports",
-        element: <Reports />,
+        element: withSuspense(Reports),
       },
       {
         path: "categories",
-        element: <Categories />,
+        element: withSuspense(Categories),
       },
       {
         path: "recurring",
-        element: <Recurring />,
+        element: withSuspense(Recurring),
       },
       {
         path: "investments",
-        element: <Investments />,
+        element: withSuspense(Investments),
       },
       {
         path: "rules",
-        element: <Rules />,
+        element: withSuspense(Rules),
       },
       {
         path: "settings",
-        element: <Settings />,
+        element: withSuspense(Settings),
       },
       {
         path: "*",

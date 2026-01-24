@@ -181,8 +181,6 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
         if (isPdfFile) {
           setLoading(true);
-          // Allow UI to render loading state before heavy processing
-          await new Promise((resolve) => setTimeout(resolve, 50));
           try {
             const preview = await previewPdfFile(selected);
             if (preview.transactions.length > 0) {
@@ -218,8 +216,6 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
         if (isTxtFile) {
           setLoading(true);
-          // Allow UI to render loading state before heavy processing
-          await new Promise((resolve) => setTimeout(resolve, 50));
           try {
             const preview = await previewBoaFile(selected);
             if (preview.transactions.length > 0) {
@@ -249,8 +245,6 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         }
 
         setLoading(true);
-        // Allow UI to render loading state before heavy processing
-        await new Promise((resolve) => setTimeout(resolve, 50));
         setFileType("csv");
         setBoaPreview(null);
         setPdfPreview(null);
@@ -938,7 +932,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
               <div className="border rounded-lg overflow-hidden">
                 {/* Column Headers */}
-                <div className="flex items-center gap-2 px-2 py-1.5 border-b bg-muted/50 text-xs text-muted-foreground font-medium">
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/50 text-xs text-muted-foreground font-medium">
                   <div className="shrink-0">
                     <Checkbox
                       checked={

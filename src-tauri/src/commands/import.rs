@@ -9,18 +9,22 @@ use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
-pub fn preview_csv_file(file_path: String) -> Result<CsvPreview> {
+pub async fn preview_csv_file(file_path: String) -> Result<CsvPreview> {
     let path = PathBuf::from(&file_path);
-    csv_parser::preview_csv(&path, 10)
+    tokio::task::spawn_blocking(move || csv_parser::preview_csv(&path, 10))
+        .await
+        .unwrap_or_else(|e| Err(crate::error::AppError::Other(e.to_string())))
 }
 
 #[tauri::command]
-pub fn parse_csv_file(
+pub async fn parse_csv_file(
     file_path: String,
     mapping: ColumnMapping,
 ) -> Result<Vec<ParsedTransaction>> {
     let path = PathBuf::from(&file_path);
-    csv_parser::parse_csv(&path, &mapping)
+    tokio::task::spawn_blocking(move || csv_parser::parse_csv(&path, &mapping))
+        .await
+        .unwrap_or_else(|e| Err(crate::error::AppError::Other(e.to_string())))
 }
 
 #[tauri::command]
@@ -362,57 +366,69 @@ pub struct ImportResult {
 
 // Bank of America text file parser
 #[tauri::command]
-pub fn preview_boa_file(file_path: String) -> Result<BoaPreview> {
+pub async fn preview_boa_file(file_path: String) -> Result<BoaPreview> {
     let path = PathBuf::from(&file_path);
-    boa_parser::preview_boa(&path, 20)
+    tokio::task::spawn_blocking(move || boa_parser::preview_boa(&path, 20))
+        .await
+        .unwrap_or_else(|e| Err(crate::error::AppError::Other(e.to_string())))
 }
 
 #[tauri::command]
-pub fn parse_boa_file(file_path: String) -> Result<Vec<serde_json::Value>> {
+pub async fn parse_boa_file(file_path: String) -> Result<Vec<serde_json::Value>> {
     let path = PathBuf::from(&file_path);
-    let transactions = boa_parser::parse_boa(&path)?;
+    tokio::task::spawn_blocking(move || {
+        let transactions = boa_parser::parse_boa(&path)?;
 
-    // Convert to JSON values for the frontend
-    let result: Vec<serde_json::Value> = transactions
-        .into_iter()
-        .map(|tx| {
-            serde_json::json!({
-                "date": tx.date,
-                "amount": tx.amount,
-                "payee": tx.description,
-                "memo": tx.description,
+        // Convert to JSON values for the frontend
+        let result: Vec<serde_json::Value> = transactions
+            .into_iter()
+            .map(|tx| {
+                serde_json::json!({
+                    "date": tx.date,
+                    "amount": tx.amount,
+                    "payee": tx.description,
+                    "memo": tx.description,
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    Ok(result)
+        Ok(result)
+    })
+    .await
+    .unwrap_or_else(|e| Err(crate::error::AppError::Other(e.to_string())))
 }
 
 // PDF file parser
 #[tauri::command]
-pub fn preview_pdf_file(file_path: String) -> Result<PdfPreview> {
+pub async fn preview_pdf_file(file_path: String) -> Result<PdfPreview> {
     let path = PathBuf::from(&file_path);
-    pdf_parser::preview_pdf(&path, 20)
+    tokio::task::spawn_blocking(move || pdf_parser::preview_pdf(&path, 20))
+        .await
+        .unwrap_or_else(|e| Err(crate::error::AppError::Other(e.to_string())))
 }
 
 #[tauri::command]
-pub fn parse_pdf_file(file_path: String) -> Result<Vec<serde_json::Value>> {
+pub async fn parse_pdf_file(file_path: String) -> Result<Vec<serde_json::Value>> {
     let path = PathBuf::from(&file_path);
-    let transactions = pdf_parser::parse_pdf(&path)?;
+    tokio::task::spawn_blocking(move || {
+        let transactions = pdf_parser::parse_pdf(&path)?;
 
-    // Convert to JSON values for the frontend
-    let result: Vec<serde_json::Value> = transactions
-        .into_iter()
-        .map(|tx| {
-            serde_json::json!({
-                "date": tx.date,
-                "amount": tx.amount,
-                "payee": tx.description,
-                "memo": tx.description,
-                "pdfCategory": tx.category,
+        // Convert to JSON values for the frontend
+        let result: Vec<serde_json::Value> = transactions
+            .into_iter()
+            .map(|tx| {
+                serde_json::json!({
+                    "date": tx.date,
+                    "amount": tx.amount,
+                    "payee": tx.description,
+                    "memo": tx.description,
+                    "pdfCategory": tx.category,
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    Ok(result)
+        Ok(result)
+    })
+    .await
+    .unwrap_or_else(|e| Err(crate::error::AppError::Other(e.to_string())))
 }

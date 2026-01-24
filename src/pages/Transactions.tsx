@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, memo, useRef } from "react";
 import {
   Plus,
   Search,
@@ -59,6 +59,95 @@ import { formatMoney, formatDate, parseMoney, getTodayString } from "@/lib/forma
 import { cn } from "@/lib/utils";
 import type { Transaction } from "@/types";
 
+// Memoized transaction row to prevent re-renders when parent state changes
+interface TransactionRowProps {
+  tx: Transaction;
+  index: number;
+  isSelected: boolean;
+  onSelect: (index: number, event: React.MouseEvent) => void;
+  onEdit: (tx: Transaction) => void;
+  onDelete: (ids: string[]) => void;
+  getAccountName: (id: string) => string;
+  getCategoryName: (id: string | null) => string;
+}
+
+const TransactionRow = memo(function TransactionRow({
+  tx,
+  index,
+  isSelected,
+  onSelect,
+  onEdit,
+  onDelete,
+  getAccountName,
+  getCategoryName,
+}: TransactionRowProps) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 px-2 py-1 rounded hover:bg-accent transition-colors overflow-hidden select-none",
+        isSelected && "bg-accent"
+      )}
+    >
+      <div className="shrink-0" onClick={(e) => onSelect(index, e)}>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => {}}
+          className="pointer-events-none"
+        />
+      </div>
+      <span className="text-sm text-muted-foreground shrink-0 w-[100px] whitespace-nowrap">
+        {formatDate(tx.date)}
+      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-sm font-medium truncate w-0 flex-1 cursor-default">
+            {tx.payee || "Unknown"}
+            {tx.transferId && " ↔"}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="select-text">{tx.payee || "Unknown"}</p>
+        </TooltipContent>
+      </Tooltip>
+      <span className="text-sm text-muted-foreground truncate shrink-0 w-[120px]">
+        {getCategoryName(tx.categoryId)}
+      </span>
+      <span className="text-sm text-muted-foreground truncate shrink-0 w-[100px]">
+        {getAccountName(tx.accountId)}
+      </span>
+      <span
+        className={cn(
+          "text-sm font-semibold font-mono shrink-0 text-right w-[110px] whitespace-nowrap",
+          tx.amount >= 0 ? "text-green-600" : "text-red-600"
+        )}
+      >
+        {formatMoney(tx.amount)}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+            <MoreHorizontal className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onEdit(tx)}>
+            <Pencil className="h-4 w-4 mr-2" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => onDelete([tx.id])}
+            className="text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+});
+
 export function Transactions() {
   const {
     transactions,
@@ -98,6 +187,16 @@ export function Transactions() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
 
+  // Create lookup Maps for O(1) access instead of O(n) find() calls
+  const accountMap = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a.name])),
+    [accounts]
+  );
+  const categoryMap = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories]
+  );
+
   // Compute sum of selected transactions
   const selectedSum = useMemo(() => {
     return transactions
@@ -129,7 +228,7 @@ export function Transactions() {
     });
   };
 
-  // Sort transactions
+  // Sort transactions - uses Maps for O(1) lookups instead of O(n) find()
   const sortedTransactions = useMemo(() => {
     const sorted = [...transactions].sort((a, b) => {
       let comparison = 0;
@@ -141,13 +240,13 @@ export function Transactions() {
           comparison = (a.payee || "").localeCompare(b.payee || "");
           break;
         case "category":
-          const catA = categories.find((c) => c.id === a.categoryId)?.name || "";
-          const catB = categories.find((c) => c.id === b.categoryId)?.name || "";
+          const catA = categoryMap.get(a.categoryId ?? "") || "";
+          const catB = categoryMap.get(b.categoryId ?? "") || "";
           comparison = catA.localeCompare(catB);
           break;
         case "account":
-          const accA = accounts.find((acc) => acc.id === a.accountId)?.name || "";
-          const accB = accounts.find((acc) => acc.id === b.accountId)?.name || "";
+          const accA = accountMap.get(a.accountId) || "";
+          const accB = accountMap.get(b.accountId) || "";
           comparison = accA.localeCompare(accB);
           break;
         case "amount":
@@ -157,7 +256,7 @@ export function Transactions() {
       return sortDirection === "asc" ? comparison : -comparison;
     });
     return sorted;
-  }, [transactions, sortColumn, sortDirection, categories, accounts]);
+  }, [transactions, sortColumn, sortDirection, categoryMap, accountMap]);
 
   const handleSort = (column: typeof sortColumn) => {
     if (sortColumn === column) {
@@ -177,14 +276,34 @@ export function Transactions() {
     );
   };
 
+  // Only fetch accounts/categories if not cached - transactions are fetched by filter useEffect
   useEffect(() => {
-    fetchTransactions();
-    fetchAccounts();
-    fetchCategories();
-  }, [fetchTransactions, fetchAccounts, fetchCategories]);
+    if (accounts.length === 0) fetchAccounts();
+    if (categories.length === 0) fetchCategories();
+  }, [accounts.length, categories.length, fetchAccounts, fetchCategories]);
+
+  // Track if this is the initial mount
+  const isInitialMount = useRef(true);
+
+  // Use refs for values that change frequently to keep callbacks stable
+  // This prevents callback recreation which would break React.memo
+  const sortedTransactionsRef = useRef(sortedTransactions);
+  const lastClickedIndexRef = useRef(lastClickedIndex);
+  const selectedIdsRef = useRef(selectedIds);
+
+  // Keep refs in sync with current values
+  sortedTransactionsRef.current = sortedTransactions;
+  lastClickedIndexRef.current = lastClickedIndex;
+  selectedIdsRef.current = selectedIds;
 
   // Auto-fetch when filters change (with debounce for search)
+  // Skip initial fetch if we already have cached transactions
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      // Skip fetch on mount if we have cached data
+      if (transactions.length > 0) return;
+    }
     const timeoutId = setTimeout(() => {
       fetchTransactions(filters);
     }, filters.searchQuery ? 300 : 0);
@@ -198,34 +317,38 @@ export function Transactions() {
     filters.minAmount,
     filters.maxAmount,
     fetchTransactions,
+    transactions.length,
   ]);
 
-  const handleOpenDialog = (transaction?: Transaction) => {
-    if (transaction) {
-      setEditingTransaction(transaction);
-      setFormData({
-        accountId: transaction.accountId,
-        date: transaction.date,
-        amount: Math.abs(transaction.amount / 100).toFixed(2),
-        isExpense: transaction.amount < 0,
-        payee: transaction.payee || "",
-        categoryId: transaction.categoryId || "",
-        notes: transaction.notes || "",
-      });
-    } else {
-      setEditingTransaction(null);
-      setFormData({
-        accountId: accounts[0]?.id || "",
-        date: getTodayString(),
-        amount: "",
-        isExpense: true,
-        payee: "",
-        categoryId: "",
-        notes: "",
-      });
-    }
-    setIsDialogOpen(true);
-  };
+  const handleOpenDialog = useCallback(
+    (transaction?: Transaction) => {
+      if (transaction) {
+        setEditingTransaction(transaction);
+        setFormData({
+          accountId: transaction.accountId,
+          date: transaction.date,
+          amount: Math.abs(transaction.amount / 100).toFixed(2),
+          isExpense: transaction.amount < 0,
+          payee: transaction.payee || "",
+          categoryId: transaction.categoryId || "",
+          notes: transaction.notes || "",
+        });
+      } else {
+        setEditingTransaction(null);
+        setFormData({
+          accountId: accounts[0]?.id || "",
+          date: getTodayString(),
+          amount: "",
+          isExpense: true,
+          payee: "",
+          categoryId: "",
+          notes: "",
+        });
+      }
+      setIsDialogOpen(true);
+    },
+    [accounts]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,12 +387,16 @@ export function Transactions() {
     setIsDialogOpen(false);
   };
 
-  const handleDelete = (ids?: string[]) => {
-    const idsToDelete = ids || Array.from(selectedIds);
-    if (idsToDelete.length === 0) return;
-    setPendingDeleteIds(idsToDelete);
-    setDeleteConfirmOpen(true);
-  };
+  // Stable callback - uses ref for selectedIds
+  const handleDelete = useCallback(
+    (ids?: string[]) => {
+      const idsToDelete = ids || Array.from(selectedIdsRef.current);
+      if (idsToDelete.length === 0) return;
+      setPendingDeleteIds(idsToDelete);
+      setDeleteConfirmOpen(true);
+    },
+    []
+  );
 
   const confirmDelete = async () => {
     await deleteTransactions(pendingDeleteIds);
@@ -285,32 +412,40 @@ export function Transactions() {
     clearSelection();
   };
 
-  const getAccountName = (id: string) =>
-    accounts.find((a) => a.id === id)?.name || "Unknown";
+  const getAccountName = useCallback(
+    (id: string) => accountMap.get(id) || "Unknown",
+    [accountMap]
+  );
 
-  const getCategoryName = (id: string | null) =>
-    id ? categories.find((c) => c.id === id)?.name || "Uncategorized" : "Uncategorized";
+  const getCategoryName = useCallback(
+    (id: string | null) => (id ? categoryMap.get(id) || "Uncategorized" : "Uncategorized"),
+    [categoryMap]
+  );
 
-  const handleSelectTransaction = (index: number, event: React.MouseEvent) => {
-    const tx = transactions[index];
-    if (!tx) return;
+  // Stable callback - never changes, reads from refs
+  const handleSelectTransaction = useCallback(
+    (index: number, event: React.MouseEvent) => {
+      const tx = sortedTransactionsRef.current[index];
+      if (!tx) return;
 
-    if (event.shiftKey && lastClickedIndex !== null) {
-      // Shift-click: select range between last clicked and current
-      const start = Math.min(lastClickedIndex, index);
-      const end = Math.max(lastClickedIndex, index);
-      for (let i = start; i <= end; i++) {
-        const t = transactions[i];
-        if (t && !selectedIds.has(t.id)) {
-          selectTransaction(t.id);
+      if (event.shiftKey && lastClickedIndexRef.current !== null) {
+        // Shift-click: select range between last clicked and current
+        const start = Math.min(lastClickedIndexRef.current, index);
+        const end = Math.max(lastClickedIndexRef.current, index);
+        for (let i = start; i <= end; i++) {
+          const t = sortedTransactionsRef.current[i];
+          if (t && !selectedIdsRef.current.has(t.id)) {
+            selectTransaction(t.id);
+          }
         }
+      } else {
+        // Regular click: toggle single item
+        selectTransaction(tx.id);
       }
-    } else {
-      // Regular click: toggle single item
-      selectTransaction(tx.id);
-    }
-    setLastClickedIndex(index);
-  };
+      setLastClickedIndex(index);
+    },
+    [selectTransaction]
+  );
 
   return (
     <>
@@ -568,81 +703,25 @@ export function Transactions() {
                     </button>
                     <span className="shrink-0 w-6"></span>
                   </div>
-                  <ScrollArea className="flex-1 min-h-0">
-                  <div className="space-y-1">
-                    {sortedTransactions.map((tx, index) => (
-                    <div
-                      key={tx.id}
-                      className={cn(
-                        "flex items-center gap-2 px-2 py-1 rounded hover:bg-accent transition-colors overflow-hidden select-none",
-                        selectedIds.has(tx.id) && "bg-accent"
-                      )}
-                    >
-                      <div
-                        className="shrink-0"
-                        onClick={(e) => handleSelectTransaction(index, e)}
-                      >
-                        <Checkbox
-                          checked={selectedIds.has(tx.id)}
-                          onCheckedChange={() => {}}
-                          className="pointer-events-none"
-                        />
+                  <TooltipProvider delayDuration={300}>
+                    <ScrollArea className="flex-1 min-h-0">
+                      <div className="space-y-1">
+                        {sortedTransactions.map((tx, index) => (
+                          <TransactionRow
+                            key={tx.id}
+                            tx={tx}
+                            index={index}
+                            isSelected={selectedIds.has(tx.id)}
+                            onSelect={handleSelectTransaction}
+                            onEdit={handleOpenDialog}
+                            onDelete={handleDelete}
+                            getAccountName={getAccountName}
+                            getCategoryName={getCategoryName}
+                          />
+                        ))}
                       </div>
-                      <span className="text-sm text-muted-foreground shrink-0 w-[100px] whitespace-nowrap">
-                        {formatDate(tx.date)}
-                      </span>
-                      <TooltipProvider delayDuration={300}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-sm font-medium truncate w-0 flex-1 cursor-default">
-                              {tx.payee || "Unknown"}
-                              {tx.transferId && " ↔"}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="select-text">{tx.payee || "Unknown"}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <span className="text-sm text-muted-foreground truncate shrink-0 w-[120px]">
-                        {getCategoryName(tx.categoryId)}
-                      </span>
-                      <span className="text-sm text-muted-foreground truncate shrink-0 w-[100px]">
-                        {getAccountName(tx.accountId)}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-sm font-semibold font-mono shrink-0 text-right w-[110px] whitespace-nowrap",
-                          tx.amount >= 0 ? "text-green-600" : "text-red-600"
-                        )}
-                      >
-                        {formatMoney(tx.amount)}
-                      </span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-                            <MoreHorizontal className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenDialog(tx)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleDelete([tx.id])}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ))}
-                  </div>
-                  </ScrollArea>
+                    </ScrollArea>
+                  </TooltipProvider>
                 </div>
               </div>
             )}

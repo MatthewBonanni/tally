@@ -7,6 +7,7 @@ interface CategoryState {
   rules: CategoryRule[];
   isLoading: boolean;
   error: string | null;
+  lastFetchedAt: number | null;
 
   fetchCategories: () => Promise<void>;
   createCategory: (data: Omit<Category, "id" | "createdAt" | "updatedAt" | "isSystem">) => Promise<Category>;
@@ -30,12 +31,17 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   rules: [],
   isLoading: false,
   error: null,
+  lastFetchedAt: null,
 
   fetchCategories: async () => {
-    set({ isLoading: true, error: null });
+    // Only show loading state if we have no cached data
+    const hasCache = get().categories.length > 0;
+    if (!hasCache) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const categories = await api.listCategories();
-      set({ categories, isLoading: false });
+      set({ categories, isLoading: false, lastFetchedAt: Date.now() });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }

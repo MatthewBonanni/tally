@@ -9,6 +9,7 @@ interface TransactionState {
   transferCandidates: TransferCandidate[];
   isLoading: boolean;
   error: string | null;
+  lastFetchedAt: number | null;
 
   fetchTransactions: (filters?: Partial<TransactionFilters>) => Promise<void>;
   createTransaction: (data: Omit<Transaction, "id" | "createdAt" | "updatedAt">) => Promise<Transaction>;
@@ -44,13 +45,18 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   transferCandidates: [],
   isLoading: false,
   error: null,
+  lastFetchedAt: null,
 
   fetchTransactions: async (filters) => {
     const mergedFilters = { ...get().filters, ...filters };
-    set({ isLoading: true, error: null });
+    // Only show loading state if we have no cached data
+    const hasCache = get().transactions.length > 0;
+    if (!hasCache) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const transactions = await api.listTransactions(mergedFilters);
-      set({ transactions, filters: mergedFilters, isLoading: false });
+      set({ transactions, filters: mergedFilters, isLoading: false, lastFetchedAt: Date.now() });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }

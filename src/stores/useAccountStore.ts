@@ -7,6 +7,7 @@ interface AccountState {
   selectedAccountId: string | null;
   isLoading: boolean;
   error: string | null;
+  lastFetchedAt: number | null;
 
   fetchAccounts: () => Promise<void>;
   createAccount: (data: Omit<Account, "id" | "createdAt" | "updatedAt">) => Promise<Account>;
@@ -26,12 +27,17 @@ export const useAccountStore = create<AccountState>((set, get) => ({
   selectedAccountId: null,
   isLoading: false,
   error: null,
+  lastFetchedAt: null,
 
   fetchAccounts: async () => {
-    set({ isLoading: true, error: null });
+    // Only show loading state if we have no cached data
+    const hasCache = get().accounts.length > 0;
+    if (!hasCache) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const accounts = await api.listAccounts();
-      set({ accounts, isLoading: false });
+      set({ accounts, isLoading: false, lastFetchedAt: Date.now() });
     } catch (error) {
       set({ error: String(error), isLoading: false });
     }
