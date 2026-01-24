@@ -361,7 +361,7 @@ export function Transactions() {
                     <div
                       key={tx.id}
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors overflow-hidden",
+                        "flex items-center gap-2 px-2 py-1 rounded hover:bg-accent transition-colors overflow-hidden",
                         selectedIds.has(tx.id) && "bg-accent"
                       )}
                     >
@@ -375,34 +375,22 @@ export function Transactions() {
                           className="pointer-events-none"
                         />
                       </div>
-                      <div
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-full shrink-0",
-                          tx.amount >= 0
-                            ? "bg-green-100 text-green-600"
-                            : "bg-red-100 text-red-600"
-                        )}
-                      >
-                        {tx.transferId ? (
-                          <ArrowLeftRight className="h-5 w-5" />
-                        ) : tx.amount >= 0 ? (
-                          <ArrowDownRight className="h-5 w-5" />
-                        ) : (
-                          <ArrowUpRight className="h-5 w-5" />
-                        )}
-                      </div>
-                      <div className="flex-1 w-0">
-                        <p className="font-medium truncate">
-                          {tx.payee || "Unknown"}
-                          {tx.transferId && " ↔"}
-                        </p>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {formatDate(tx.date)} • {getAccountName(tx.accountId)} • {getCategoryName(tx.categoryId)}
-                        </p>
-                      </div>
+                      <span className="text-sm text-muted-foreground shrink-0 w-[100px] whitespace-nowrap">
+                        {formatDate(tx.date)}
+                      </span>
+                      <span className="text-sm font-medium truncate w-0 flex-1">
+                        {tx.payee || "Unknown"}
+                        {tx.transferId && " ↔"}
+                      </span>
+                      <span className="text-sm text-muted-foreground truncate shrink-0 w-[120px]">
+                        {getCategoryName(tx.categoryId)}
+                      </span>
+                      <span className="text-sm text-muted-foreground truncate shrink-0 w-[100px]">
+                        {getAccountName(tx.accountId)}
+                      </span>
                       <span
                         className={cn(
-                          "font-semibold shrink-0 text-right min-w-[80px]",
+                          "text-sm font-semibold shrink-0 text-right w-[80px]",
                           tx.amount >= 0 ? "text-green-600" : "text-red-600"
                         )}
                       >
@@ -410,8 +398,8 @@ export function Transactions() {
                       </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
+                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                            <MoreHorizontal className="h-3 w-3" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
