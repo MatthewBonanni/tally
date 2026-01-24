@@ -5,10 +5,13 @@ import {
   FileSpreadsheet,
   ChevronRight,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   Check,
   AlertCircle,
   Wallet,
   ArrowLeftRight,
+  Loader2,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
@@ -86,6 +89,47 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
   const [transferCandidates, setTransferCandidates] = useState<TransferCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sortColumn, setSortColumn] = useState<"date" | "payee" | "amount">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Sort parsed transactions
+  const sortedParsedTransactions = useMemo(() => {
+    const sorted = [...parsedTransactions].map((tx, originalIndex) => ({ tx, originalIndex }));
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sortColumn) {
+        case "date":
+          comparison = a.tx.date.localeCompare(b.tx.date);
+          break;
+        case "payee":
+          comparison = (a.tx.payee || "").localeCompare(b.tx.payee || "");
+          break;
+        case "amount":
+          comparison = a.tx.amount - b.tx.amount;
+          break;
+      }
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [parsedTransactions, sortColumn, sortDirection]);
+
+  const handleSort = (column: typeof sortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection(column === "date" ? "desc" : "asc");
+    }
+  };
+
+  const SortIcon = ({ column }: { column: typeof sortColumn }) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === "asc" ? (
+      <ChevronUp className="h-3 w-3 inline ml-0.5" />
+    ) : (
+      <ChevronDown className="h-3 w-3 inline ml-0.5" />
+    );
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -134,6 +178,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         const isPdfFile = name.toLowerCase().endsWith(".pdf");
 
         if (isPdfFile) {
+          setLoading(true);
           try {
             const preview = await previewPdfFile(selected);
             if (preview.transactions.length > 0) {
@@ -150,6 +195,8 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           } catch (err) {
             setError(String(err));
             return;
+          } finally {
+            setLoading(false);
           }
         }
 
@@ -341,14 +388,6 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
     setLastClickedIndex(index);
   };
 
-  const toggleAll = () => {
-    if (selectedTransactions.size === parsedTransactions.length) {
-      setSelectedTransactions(new Set());
-    } else {
-      setSelectedTransactions(new Set(parsedTransactions.map((_, i) => i)));
-    }
-  };
-
   // Compute sum of selected transactions
   const selectedSum = useMemo(() => {
     return parsedTransactions
@@ -453,14 +492,29 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           {step === "upload" && (
             <div className="space-y-4">
               <div
-                className="border-2 border-dashed rounded-lg p-12 text-center cursor-pointer hover:border-primary transition-colors"
-                onClick={handleSelectFile}
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-12 text-center transition-colors",
+                  loading ? "cursor-default" : "cursor-pointer hover:border-primary"
+                )}
+                onClick={loading ? undefined : handleSelectFile}
               >
-                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-lg font-medium">Click to select a file</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Supports CSV, PDF, and Bank of America TXT statements
-                </p>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-12 w-12 mx-auto mb-4 text-primary animate-spin" />
+                    <p className="text-lg font-medium">Processing PDF...</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Extracting transactions from your statement
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-lg font-medium">Click to select a file</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Supports CSV, PDF, and Bank of America TXT statements
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -707,13 +761,13 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                   {boaPreview.beginningBalance && (
                     <div className="p-3 bg-muted rounded-lg">
                       <p className="text-sm text-muted-foreground">Beginning Balance</p>
-                      <p className="text-lg font-semibold">{formatMoney(boaPreview.beginningBalance)}</p>
+                      <p className="text-lg font-semibold font-mono">{formatMoney(boaPreview.beginningBalance)}</p>
                     </div>
                   )}
                   {boaPreview.endingBalance && (
                     <div className="p-3 bg-muted rounded-lg">
                       <p className="text-sm text-muted-foreground">Ending Balance</p>
-                      <p className="text-lg font-semibold">{formatMoney(boaPreview.endingBalance)}</p>
+                      <p className="text-lg font-semibold font-mono">{formatMoney(boaPreview.endingBalance)}</p>
                     </div>
                   )}
                 </div>
@@ -767,7 +821,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                         </div>
                         <span
                           className={cn(
-                            "font-semibold",
+                            "font-semibold font-mono",
                             tx.amount >= 0 ? "text-green-600" : "text-red-600"
                           )}
                         >
@@ -853,7 +907,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                         </div>
                         <span
                           className={cn(
-                            "font-semibold",
+                            "font-semibold font-mono",
                             tx.amount >= 0 ? "text-green-600" : "text-red-600"
                           )}
                         >
@@ -869,66 +923,97 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
           {/* Step 3: Preview & Confirm */}
           {step === "preview" && (
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={selectedTransactions.size === parsedTransactions.length}
-                    onCheckedChange={toggleAll}
-                  />
-                  <Label>Select all ({parsedTransactions.length} transactions)</Label>
-                </div>
-                <div className="text-right">
-                  <span className="text-sm text-muted-foreground">
-                    {selectedTransactions.size} selected
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">
+                    {selectedTransactions.size} of {parsedTransactions.length} selected
                   </span>
                   {selectedTransactions.size > 0 && (
                     <span className={cn(
-                      "ml-3 text-sm font-medium",
+                      "text-sm font-semibold font-mono",
                       selectedSum >= 0 ? "text-green-600" : "text-red-600"
                     )}>
-                      Sum: {formatMoney(selectedSum)}
+                      {formatMoney(selectedSum)}
                     </span>
                   )}
                 </div>
               </div>
 
-              <ScrollArea className="h-[350px] border rounded-lg">
-                <div className="divide-y">
-                  {parsedTransactions.map((tx, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "flex items-center gap-4 p-3 hover:bg-accent overflow-hidden",
-                        !selectedTransactions.has(i) && "opacity-50"
-                      )}
-                    >
+              <div className="border rounded-lg overflow-hidden">
+                {/* Column Headers */}
+                <div className="flex items-center gap-2 px-2 py-1.5 border-b bg-muted/50 text-xs text-muted-foreground font-medium">
+                  <div className="shrink-0">
+                    <Checkbox
+                      checked={
+                        parsedTransactions.length > 0 &&
+                        selectedTransactions.size === parsedTransactions.length
+                      }
+                      onCheckedChange={(checked) =>
+                        checked ? setSelectedTransactions(new Set(parsedTransactions.map((_, i) => i))) : setSelectedTransactions(new Set())
+                      }
+                    />
+                  </div>
+                  <button
+                    className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("date")}
+                  >
+                    Date<SortIcon column="date" />
+                  </button>
+                  <button
+                    className="w-0 flex-1 text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("payee")}
+                  >
+                    Payee<SortIcon column="payee" />
+                  </button>
+                  <button
+                    className="shrink-0 w-[110px] text-right hover:text-foreground transition-colors"
+                    onClick={() => handleSort("amount")}
+                  >
+                    Amount<SortIcon column="amount" />
+                  </button>
+                </div>
+
+                <ScrollArea className="h-[320px]">
+                  <div className="space-y-0.5 p-1">
+                    {sortedParsedTransactions.map(({ tx, originalIndex }) => (
                       <div
-                        className="shrink-0"
-                        onClick={(e) => toggleTransaction(i, e)}
-                      >
-                        <Checkbox
-                          checked={selectedTransactions.has(i)}
-                          onCheckedChange={() => {}}
-                          className="pointer-events-none"
-                        />
-                      </div>
-                      <div className="flex-1 w-0">
-                        <p className="font-medium truncate">{tx.payee || "Unknown"}</p>
-                        <p className="text-sm text-muted-foreground truncate">{tx.date}</p>
-                      </div>
-                      <span
+                        key={originalIndex}
                         className={cn(
-                          "font-semibold shrink-0 min-w-[80px] text-right",
-                          tx.amount >= 0 ? "text-green-600" : "text-red-600"
+                          "flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent transition-colors select-none",
+                          selectedTransactions.has(originalIndex) && "bg-accent",
+                          !selectedTransactions.has(originalIndex) && "opacity-50"
                         )}
                       >
-                        {formatMoney(tx.amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                        <div
+                          className="shrink-0"
+                          onClick={(e) => toggleTransaction(originalIndex, e)}
+                        >
+                          <Checkbox
+                            checked={selectedTransactions.has(originalIndex)}
+                            onCheckedChange={() => {}}
+                            className="pointer-events-none"
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground shrink-0 w-[100px] whitespace-nowrap">
+                          {tx.date}
+                        </span>
+                        <span className="text-sm font-medium truncate w-0 flex-1">
+                          {tx.payee || "Unknown"}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-sm font-semibold font-mono shrink-0 text-right w-[110px] whitespace-nowrap",
+                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
+                          )}
+                        >
+                          {formatMoney(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
           )}
 
@@ -974,7 +1059,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                             </p>
                             <p
                               className={cn(
-                                "font-semibold mt-1",
+                                "font-semibold font-mono mt-1",
                                 candidate.transactionA.amount >= 0
                                   ? "text-green-600"
                                   : "text-red-600"
@@ -999,7 +1084,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                             </p>
                             <p
                               className={cn(
-                                "font-semibold mt-1",
+                                "font-semibold font-mono mt-1",
                                 candidate.transactionB.amount >= 0
                                   ? "text-green-600"
                                   : "text-red-600"
