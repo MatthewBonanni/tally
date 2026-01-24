@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -10,7 +10,6 @@ import {
   Pencil,
   Trash2,
   Tags,
-  Link2,
   Upload,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,6 +82,13 @@ export function Transactions() {
     categoryId: "",
     notes: "",
   });
+
+  // Compute sum of selected transactions
+  const selectedSum = useMemo(() => {
+    return transactions
+      .filter((tx) => selectedIds.has(tx.id))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [transactions, selectedIds]);
 
   useEffect(() => {
     fetchTransactions();
@@ -252,9 +258,17 @@ export function Transactions() {
           <Card className="mb-4 bg-primary/5 border-primary/20">
             <CardContent className="py-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  {selectedIds.size} selected
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">
+                    {selectedIds.size} selected
+                  </span>
+                  <span className={cn(
+                    "text-sm font-semibold",
+                    selectedSum >= 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {formatMoney(selectedSum)}
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={clearSelection}>
                     Clear
@@ -325,13 +339,14 @@ export function Transactions() {
                     <div
                       key={tx.id}
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors",
+                        "flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors overflow-hidden",
                         selectedIds.has(tx.id) && "bg-accent"
                       )}
                     >
                       <Checkbox
                         checked={selectedIds.has(tx.id)}
                         onCheckedChange={() => selectTransaction(tx.id)}
+                        className="shrink-0"
                       />
                       <div
                         className={cn(
@@ -349,26 +364,18 @@ export function Transactions() {
                           <ArrowUpRight className="h-5 w-5" />
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium truncate">
-                            {tx.payee || "Unknown"}
-                          </p>
-                          {tx.transferId && (
-                            <Link2 className="h-3 w-3 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>{formatDate(tx.date)}</span>
-                          <span>•</span>
-                          <span>{getAccountName(tx.accountId)}</span>
-                          <span>•</span>
-                          <span>{getCategoryName(tx.categoryId)}</span>
-                        </div>
+                      <div className="flex-1 w-0">
+                        <p className="font-medium truncate">
+                          {tx.payee || "Unknown"}
+                          {tx.transferId && " ↔"}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {formatDate(tx.date)} • {getAccountName(tx.accountId)} • {getCategoryName(tx.categoryId)}
+                        </p>
                       </div>
                       <span
                         className={cn(
-                          "font-semibold shrink-0",
+                          "font-semibold shrink-0 text-right min-w-[80px]",
                           tx.amount >= 0 ? "text-green-600" : "text-red-600"
                         )}
                       >
