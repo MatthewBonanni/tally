@@ -350,6 +350,7 @@ export async function parsePdfFile(filePath: string): Promise<Array<{
   amount: number;
   payee: string;
   memo: string;
+  pdfCategory?: string;
 }>> {
   return invoke("parse_pdf_file", { filePath });
 }

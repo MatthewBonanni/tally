@@ -39,12 +39,40 @@ pub fn import_transactions(
 
     let mut imported_ids: Vec<String> = Vec::new();
 
+    // Build a cache of category names to IDs for PDF category resolution
+    let mut category_name_cache: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    {
+        let mut stmt = conn.prepare(
+            "SELECT id, name FROM categories WHERE deleted_at IS NULL"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        for row in rows {
+            if let Ok((id, name)) = row {
+                // Store lowercase name for case-insensitive matching
+                category_name_cache.insert(name.to_lowercase(), id);
+            }
+        }
+    }
+
     for tx in transactions {
         let date = tx["date"].as_str().unwrap_or("");
         let amount = tx["amount"].as_i64().unwrap_or(0);
         let payee = tx["payee"].as_str();
         let memo = tx["memo"].as_str();
-        let category_id = tx["categoryId"].as_str();
+        let mut category_id = tx["categoryId"].as_str().map(|s| s.to_string());
+
+        // If no categoryId but we have a pdfCategory, try to resolve it
+        if category_id.is_none() {
+            if let Some(pdf_category) = tx["pdfCategory"].as_str() {
+                let pdf_cat_lower = pdf_category.to_lowercase();
+                if let Some(resolved_id) = category_name_cache.get(&pdf_cat_lower) {
+                    category_id = Some(resolved_id.clone());
+                }
+            }
+        }
+        let category_id = category_id;
 
         // Simple duplicate detection: same account, date, amount, payee
         let existing: Option<String> = conn
@@ -77,7 +105,7 @@ pub fn import_transactions(
                 amount,
                 payee,
                 memo,
-                category_id,
+                category_id.as_deref(),
                 batch_id,
                 now,
             ],
@@ -381,6 +409,7 @@ pub fn parse_pdf_file(file_path: String) -> Result<Vec<serde_json::Value>> {
                 "amount": tx.amount,
                 "payee": tx.description,
                 "memo": tx.description,
+                "pdfCategory": tx.category,
             })
         })
         .collect();

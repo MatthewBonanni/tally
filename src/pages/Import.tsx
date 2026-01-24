@@ -69,7 +69,7 @@ export function Import() {
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; categorized: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -209,6 +209,7 @@ export function Import() {
           amount: tx.amount,
           payee: tx.payee,
           memo: tx.memo,
+          categoryHint: tx.pdfCategory,
           rawData: {},
         }));
         setParsedTransactions(transactions);
@@ -258,10 +259,11 @@ export function Import() {
           amount: tx.amount,
           payee: tx.payee,
           memo: tx.memo,
+          pdfCategory: tx.categoryHint,
         }));
 
       const result = await importTransactions(accountId, transactionsToImport);
-      setImportResult({ imported: result.imported, skipped: result.skipped });
+      setImportResult({ imported: result.imported, skipped: result.skipped, categorized: result.categorized });
       setStep("complete");
     } catch (err) {
       setError(String(err));

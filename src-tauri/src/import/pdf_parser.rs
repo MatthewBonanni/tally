@@ -12,6 +12,7 @@ pub struct PdfTransaction {
     pub amount: i64,
     pub running_balance: Option<i64>,
     pub raw_line: String,
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -193,21 +194,31 @@ fn is_summary_table_line(line: &str) -> bool {
 }
 
 /// Check if a line is just a category header (e.g., "Groceries" or "Dining:")
-fn is_category_header(line: &str) -> bool {
+/// Returns the category name if it is a category header, None otherwise
+fn extract_category_header(line: &str) -> Option<String> {
     let lower = line.to_lowercase();
     let trimmed = lower.trim().trim_end_matches(':');
+
+    // Make sure it's not a transaction line (no date at start)
+    if starts_with_date(line) {
+        return None;
+    }
 
     // Check if the line is primarily just a category name
     for category in CATEGORY_KEYWORDS {
         if trimmed == *category || trimmed.starts_with(&format!("{} ", category)) {
-            // Make sure it's not a transaction line (no date at start)
-            if !starts_with_date(line) {
-                return true;
-            }
+            // Return the original casing from the line, cleaned up
+            let original = line.trim().trim_end_matches(':').to_string();
+            return Some(original);
         }
     }
 
-    false
+    None
+}
+
+/// Check if a line is just a category header (e.g., "Groceries" or "Dining:")
+fn is_category_header(line: &str) -> bool {
+    extract_category_header(line).is_some()
 }
 
 /// Check if a line looks like chart residue or noise
@@ -376,8 +387,8 @@ fn extract_date_from_line(line: &str) -> Option<(String, usize)> {
     None
 }
 
-/// Parse a transaction line
-fn parse_transaction_line(line: &str) -> Option<PdfTransaction> {
+/// Parse a transaction line with an optional category
+fn parse_transaction_line(line: &str, category: Option<String>) -> Option<PdfTransaction> {
     // Extract date from the beginning
     let (date, date_end) = extract_date_from_line(line)?;
 
@@ -422,6 +433,7 @@ fn parse_transaction_line(line: &str) -> Option<PdfTransaction> {
         amount,
         running_balance,
         raw_line: line.to_string(),
+        category,
     })
 }
 
@@ -500,6 +512,7 @@ pub fn preview_pdf(path: &Path, limit: usize) -> Result<PdfPreview> {
     let mut past_summary = false;
     let mut valid_lines = 0;
     let mut total_lines = 0;
+    let mut current_category: Option<String> = None;
 
     for line in &lines {
         let trimmed = line.trim();
@@ -520,6 +533,12 @@ pub fn preview_pdf(path: &Path, limit: usize) -> Result<PdfPreview> {
             continue;
         }
 
+        // Check for category header and update current category before skipping
+        if let Some(category) = extract_category_header(trimmed) {
+            current_category = Some(category);
+            continue;
+        }
+
         // Skip lines that look like summary/total rows
         if should_skip_line(trimmed) {
             continue;
@@ -528,7 +547,7 @@ pub fn preview_pdf(path: &Path, limit: usize) -> Result<PdfPreview> {
         // Parse transaction lines (only if we're past the summary section or found a transaction header)
         if starts_with_date(trimmed) {
             total_lines += 1;
-            if let Some(tx) = parse_transaction_line(trimmed) {
+            if let Some(tx) = parse_transaction_line(trimmed, current_category.clone()) {
                 valid_lines += 1;
                 // Only add if we're past summary section, OR if we haven't found any structure yet
                 // (some PDFs don't have clear section markers)
@@ -545,10 +564,17 @@ pub fn preview_pdf(path: &Path, limit: usize) -> Result<PdfPreview> {
         transactions.clear();
         valid_lines = 0;
         total_lines = 0;
+        current_category = None;
 
         for line in &lines {
             let trimmed = line.trim();
             if trimmed.is_empty() {
+                continue;
+            }
+
+            // Check for category header and update current category before skipping
+            if let Some(category) = extract_category_header(trimmed) {
+                current_category = Some(category);
                 continue;
             }
 
@@ -559,7 +585,7 @@ pub fn preview_pdf(path: &Path, limit: usize) -> Result<PdfPreview> {
 
             if starts_with_date(trimmed) {
                 total_lines += 1;
-                if let Some(tx) = parse_transaction_line(trimmed) {
+                if let Some(tx) = parse_transaction_line(trimmed, current_category.clone()) {
                     valid_lines += 1;
                     transactions.push(tx);
                 }
@@ -630,15 +656,17 @@ mod tests {
     fn test_parse_transaction_line() {
         // Test a typical credit card transaction line (amounts are negative by default)
         let line = "01/15/25 COFFEE SHOP PALO ALTO, CA 5.50";
-        let tx = parse_transaction_line(line).unwrap();
+        let tx = parse_transaction_line(line, None).unwrap();
         assert_eq!(tx.date, "2025-01-15");
         assert_eq!(tx.amount, -550); // Expenses are negative
         assert!(tx.description.contains("COFFEE"));
+        assert!(tx.category.is_none());
 
         // Test a credit/refund line
         let line_cr = "01/29/24 SQ *SELF EDGE WEB STOR San Francisco, CA 113.19CR";
-        let tx_cr = parse_transaction_line(line_cr).unwrap();
+        let tx_cr = parse_transaction_line(line_cr, Some("Dining".to_string())).unwrap();
         assert_eq!(tx_cr.date, "2024-01-29");
         assert_eq!(tx_cr.amount, 11319); // Credits are positive
+        assert_eq!(tx_cr.category, Some("Dining".to_string()));
     }
 }

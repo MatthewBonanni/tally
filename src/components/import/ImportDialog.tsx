@@ -232,6 +232,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           amount: tx.amount,
           payee: tx.payee,
           memo: tx.memo,
+          categoryHint: tx.pdfCategory,
           rawData: {},
         }));
         setParsedTransactions(transactions);
@@ -280,6 +281,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           amount: tx.amount,
           payee: tx.payee,
           memo: tx.memo,
+          pdfCategory: tx.categoryHint,
         }));
 
       const result = await importTransactions(accountId, transactionsToImport);
