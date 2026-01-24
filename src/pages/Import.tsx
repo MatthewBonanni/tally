@@ -30,17 +30,20 @@ import {
   importTransactions,
   previewBoaFile,
   parseBoaFile,
+  previewPdfFile,
+  parsePdfFile,
   type CsvPreview,
   type ColumnMapping,
   type ParsedTransaction,
   type BoaPreview,
+  type PdfPreview,
 } from "@/lib/tauri";
 import { formatMoney } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 type Step = "upload" | "mapping" | "preview" | "complete";
 
-type FileType = "csv" | "boa";
+type FileType = "csv" | "boa" | "pdf";
 
 export function Import() {
   const navigate = useNavigate();
@@ -52,6 +55,7 @@ export function Import() {
   const [accountId, setAccountId] = useState<string>("");
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   const [boaPreview, setBoaPreview] = useState<BoaPreview | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<PdfPreview | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     dateColumn: 0,
     amountColumn: 1,
@@ -78,7 +82,7 @@ export function Import() {
       const selected = await open({
         multiple: false,
         filters: [
-          { name: "Bank Statements", extensions: ["csv", "txt"] },
+          { name: "Bank Statements", extensions: ["csv", "txt", "pdf"] },
         ],
       });
 
@@ -90,6 +94,28 @@ export function Import() {
 
         // Detect file type based on extension
         const isTxtFile = name.toLowerCase().endsWith(".txt");
+        const isPdfFile = name.toLowerCase().endsWith(".pdf");
+
+        if (isPdfFile) {
+          // Try PDF parser
+          try {
+            const preview = await previewPdfFile(selected);
+            if (preview.transactions.length > 0) {
+              setFileType("pdf");
+              setPdfPreview(preview);
+              setCsvPreview(null);
+              setBoaPreview(null);
+              setStep("mapping");
+              return;
+            } else {
+              setError("No transactions found in PDF. Try exporting as CSV from your bank.");
+              return;
+            }
+          } catch (err) {
+            setError(String(err));
+            return;
+          }
+        }
 
         if (isTxtFile) {
           // Try Bank of America parser for .txt files
@@ -99,6 +125,7 @@ export function Import() {
               setFileType("boa");
               setBoaPreview(preview);
               setCsvPreview(null);
+              setPdfPreview(null);
               // Skip mapping step for BoA files - go to account selection in preview
               setStep("mapping"); // Still need to select account
               return;
@@ -111,6 +138,7 @@ export function Import() {
         // Standard CSV parsing
         setFileType("csv");
         setBoaPreview(null);
+        setPdfPreview(null);
         const preview = await previewCsvFile(selected);
         setCsvPreview(preview);
 
@@ -163,6 +191,19 @@ export function Import() {
         // Parse Bank of America file
         const boaTx = await parseBoaFile(filePath);
         const transactions: ParsedTransaction[] = boaTx.map((tx) => ({
+          date: tx.date,
+          amount: tx.amount,
+          payee: tx.payee,
+          memo: tx.memo,
+          rawData: {},
+        }));
+        setParsedTransactions(transactions);
+        setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+        setStep("preview");
+      } else if (fileType === "pdf") {
+        // Parse PDF file
+        const pdfTx = await parsePdfFile(filePath);
+        const transactions: ParsedTransaction[] = pdfTx.map((tx) => ({
           date: tx.date,
           amount: tx.amount,
           payee: tx.payee,
@@ -301,7 +342,7 @@ export function Import() {
             <CardHeader>
               <CardTitle>Select a File</CardTitle>
               <CardDescription>
-                Choose a CSV or TXT statement file exported from your bank
+                Choose a CSV, TXT, or PDF statement file exported from your bank
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -312,7 +353,7 @@ export function Import() {
                 <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-lg font-medium">Click to select a file</p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Supports CSV files and Bank of America TXT statements
+                  Supports CSV, PDF, and Bank of America TXT statements
                 </p>
               </div>
             </CardContent>
@@ -651,6 +692,95 @@ export function Import() {
           </Card>
         )}
 
+        {/* Step 2: PDF File - Account selection with confidence indicator */}
+        {step === "mapping" && fileType === "pdf" && pdfPreview && (
+          <Card className="max-w-4xl mx-auto">
+            <CardHeader>
+              <CardTitle>PDF Statement</CardTitle>
+              <CardDescription>
+                {pdfPreview.totalRows} transactions detected
+                {pdfPreview.detectedFormat && ` (${pdfPreview.detectedFormat} format)`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Confidence Warning */}
+              {pdfPreview.confidence < 0.7 && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />
+                  <span className="text-sm text-yellow-700 dark:text-yellow-400">
+                    Low parsing confidence ({Math.round(pdfPreview.confidence * 100)}%). Please review transactions carefully.
+                  </span>
+                </div>
+              )}
+
+              {/* File Info */}
+              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">{fileName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    PDF statement {pdfPreview.detectedFormat ? `(${pdfPreview.detectedFormat})` : ""}
+                  </p>
+                </div>
+              </div>
+
+              {/* Account Selection */}
+              <div className="space-y-2">
+                <Label>Import to Account</Label>
+                <Select value={accountId} onValueChange={setAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Transaction Preview */}
+              <div>
+                <Label className="mb-2 block">Preview (first 10 transactions)</Label>
+                <ScrollArea className="h-[200px] border rounded-lg">
+                  <div className="divide-y">
+                    {pdfPreview.transactions.slice(0, 10).map((tx, i) => (
+                      <div key={i} className="flex items-center justify-between p-3">
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="font-medium truncate">{tx.description}</p>
+                          <p className="text-sm text-muted-foreground">{tx.date}</p>
+                        </div>
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
+                          )}
+                        >
+                          {formatMoney(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-between pt-4">
+                <Button variant="outline" onClick={() => setStep("upload")}>
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+                <Button onClick={handleParseFile} disabled={loading || !accountId}>
+                  {loading ? "Parsing..." : "Continue"}
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Step 3: Preview & Confirm */}
         {step === "preview" && (
           <Card className="max-w-4xl mx-auto">
@@ -733,6 +863,8 @@ export function Import() {
                   setStep("upload");
                   setFilePath(null);
                   setCsvPreview(null);
+                  setBoaPreview(null);
+                  setPdfPreview(null);
                   setParsedTransactions([]);
                   setImportResult(null);
                 }}>

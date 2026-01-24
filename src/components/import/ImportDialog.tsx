@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Upload,
@@ -34,16 +34,19 @@ import {
   importTransactions,
   previewBoaFile,
   parseBoaFile,
+  previewPdfFile,
+  parsePdfFile,
   type CsvPreview,
   type ColumnMapping,
   type ParsedTransaction,
   type BoaPreview,
+  type PdfPreview,
 } from "@/lib/tauri";
 import { formatMoney } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 type Step = "upload" | "mapping" | "preview" | "complete";
-type FileType = "csv" | "boa";
+type FileType = "csv" | "boa" | "pdf";
 
 interface ImportDialogProps {
   open: boolean;
@@ -61,6 +64,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
   const [accountId, setAccountId] = useState<string>("");
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   const [boaPreview, setBoaPreview] = useState<BoaPreview | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<PdfPreview | null>(null);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     dateColumn: 0,
     amountColumn: 1,
@@ -93,6 +97,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         setFileName(null);
         setCsvPreview(null);
         setBoaPreview(null);
+        setPdfPreview(null);
         setParsedTransactions([]);
         setSelectedTransactions(new Set());
         setImportResult(null);
@@ -108,7 +113,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
       const selected = await open({
         multiple: false,
         filters: [
-          { name: "Bank Statements", extensions: ["csv", "txt"] },
+          { name: "Bank Statements", extensions: ["csv", "txt", "pdf"] },
         ],
       });
 
@@ -119,6 +124,27 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         setError(null);
 
         const isTxtFile = name.toLowerCase().endsWith(".txt");
+        const isPdfFile = name.toLowerCase().endsWith(".pdf");
+
+        if (isPdfFile) {
+          try {
+            const preview = await previewPdfFile(selected);
+            if (preview.transactions.length > 0) {
+              setFileType("pdf");
+              setPdfPreview(preview);
+              setCsvPreview(null);
+              setBoaPreview(null);
+              setStep("mapping");
+              return;
+            } else {
+              setError("No transactions found in PDF. Try exporting as CSV from your bank.");
+              return;
+            }
+          } catch (err) {
+            setError(String(err));
+            return;
+          }
+        }
 
         if (isTxtFile) {
           try {
@@ -127,6 +153,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
               setFileType("boa");
               setBoaPreview(preview);
               setCsvPreview(null);
+              setPdfPreview(null);
               setStep("mapping");
               return;
             }
@@ -137,6 +164,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
         setFileType("csv");
         setBoaPreview(null);
+        setPdfPreview(null);
         const preview = await previewCsvFile(selected);
         setCsvPreview(preview);
 
@@ -187,6 +215,18 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
       if (fileType === "boa") {
         const boaTx = await parseBoaFile(filePath);
         const transactions: ParsedTransaction[] = boaTx.map((tx) => ({
+          date: tx.date,
+          amount: tx.amount,
+          payee: tx.payee,
+          memo: tx.memo,
+          rawData: {},
+        }));
+        setParsedTransactions(transactions);
+        setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+        setStep("preview");
+      } else if (fileType === "pdf") {
+        const pdfTx = await parsePdfFile(filePath);
+        const transactions: ParsedTransaction[] = pdfTx.map((tx) => ({
           date: tx.date,
           amount: tx.amount,
           payee: tx.payee,
@@ -271,6 +311,13 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
     }
   };
 
+  // Compute sum of selected transactions
+  const selectedSum = useMemo(() => {
+    return parsedTransactions
+      .filter((_, i) => selectedTransactions.has(i))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+  }, [parsedTransactions, selectedTransactions]);
+
   const handleClose = () => {
     onOpenChange(false);
   };
@@ -345,7 +392,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                 <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-lg font-medium">Click to select a file</p>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Supports CSV files and Bank of America TXT statements
+                  Supports CSV, PDF, and Bank of America TXT statements
                 </p>
               </div>
             </div>
@@ -667,6 +714,92 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
             </div>
           )}
 
+          {/* Step 2: PDF File */}
+          {step === "mapping" && fileType === "pdf" && pdfPreview && (
+            <div className="space-y-6">
+              {/* Confidence Warning */}
+              {pdfPreview.confidence < 0.7 && (
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />
+                  <span className="text-sm text-yellow-700 dark:text-yellow-400">
+                    Low parsing confidence ({Math.round(pdfPreview.confidence * 100)}%). Please review transactions carefully.
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">{fileName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    PDF statement - {pdfPreview.totalRows} transactions
+                    {pdfPreview.detectedFormat && ` (${pdfPreview.detectedFormat})`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Import to Account</Label>
+                {accounts.length === 0 ? (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+                    <Wallet className="h-5 w-5 text-amber-600 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">No accounts yet</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Create an account first to import transactions</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        onOpenChange(false);
+                        navigate("/accounts");
+                      }}
+                    >
+                      Add Account
+                    </Button>
+                  </div>
+                ) : (
+                  <Select value={accountId} onValueChange={setAccountId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Preview (first 10 transactions)</Label>
+                <ScrollArea className="h-[200px] border rounded-lg">
+                  <div className="divide-y">
+                    {pdfPreview.transactions.slice(0, 10).map((tx, i) => (
+                      <div key={i} className="flex items-center justify-between p-3">
+                        <div className="flex-1 min-w-0 mr-4">
+                          <p className="font-medium truncate">{tx.description}</p>
+                          <p className="text-sm text-muted-foreground">{tx.date}</p>
+                        </div>
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
+                          )}
+                        >
+                          {formatMoney(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+
           {/* Step 3: Preview & Confirm */}
           {step === "preview" && (
             <div className="space-y-4">
@@ -678,9 +811,19 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                   />
                   <Label>Select all ({parsedTransactions.length} transactions)</Label>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  {selectedTransactions.size} selected
-                </span>
+                <div className="text-right">
+                  <span className="text-sm text-muted-foreground">
+                    {selectedTransactions.size} selected
+                  </span>
+                  {selectedTransactions.size > 0 && (
+                    <span className={cn(
+                      "ml-3 text-sm font-medium",
+                      selectedSum >= 0 ? "text-green-600" : "text-red-600"
+                    )}>
+                      Sum: {formatMoney(selectedSum)}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <ScrollArea className="h-[350px] border rounded-lg">
@@ -784,6 +927,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                   setFilePath(null);
                   setCsvPreview(null);
                   setBoaPreview(null);
+                  setPdfPreview(null);
                   setParsedTransactions([]);
                   setImportResult(null);
                 }}

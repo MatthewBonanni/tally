@@ -323,6 +323,37 @@ export async function parseBoaFile(filePath: string): Promise<Array<{
   return invoke("parse_boa_file", { filePath });
 }
 
+// PDF file parser
+export interface PdfTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  runningBalance: number | null;
+  rawLine: string;
+}
+
+export interface PdfPreview {
+  transactions: PdfTransaction[];
+  totalRows: number;
+  detectedFormat: string | null;
+  detectedColumns: string[];
+  rawTextSample: string;
+  confidence: number;
+}
+
+export async function previewPdfFile(filePath: string): Promise<PdfPreview> {
+  return invoke("preview_pdf_file", { filePath });
+}
+
+export async function parsePdfFile(filePath: string): Promise<Array<{
+  date: string;
+  amount: number;
+  payee: string;
+  memo: string;
+}>> {
+  return invoke("parse_pdf_file", { filePath });
+}
+
 // Export commands
 export async function exportToCsv(filters: Partial<TransactionFilters>): Promise<string> {
   return invoke("export_to_csv", { filters });

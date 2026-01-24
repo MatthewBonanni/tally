@@ -7,6 +7,20 @@ pub mod models;
 
 use db::Database;
 use std::sync::Mutex;
+use tauri::Manager;
+
+/// Configure PDFium library location for PDF import support
+fn setup_pdfium(app: &tauri::App) {
+    // Try to find the PDFium library in the app's resource directory (for bundled apps)
+    // or in the src-tauri directory (for development)
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let resource_path = resource_dir.to_string_lossy().to_string();
+        pdfium::set_library_location(&resource_path);
+    }
+
+    // For development, also try the current directory and src-tauri
+    // The pdfium crate will check these locations in order
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,6 +28,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            setup_pdfium(app);
+            Ok(())
+        })
         .manage(Mutex::new(Database::new()))
         .invoke_handler(tauri::generate_handler![
             // Settings
@@ -61,6 +79,8 @@ pub fn run() {
             commands::import_transactions,
             commands::preview_boa_file,
             commands::parse_boa_file,
+            commands::preview_pdf_file,
+            commands::parse_pdf_file,
             // Budgets
             commands::list_budgets,
             commands::get_budget_summary,

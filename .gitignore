@@ -25,6 +25,9 @@ dist-ssr
 
 # Tauri
 src-tauri/target/
+src-tauri/libpdfium.dylib
+src-tauri/libpdfium.so
+src-tauri/pdfium.dll
 
 # Database
 *.db
