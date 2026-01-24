@@ -73,6 +73,7 @@ export function Transactions() {
   const [isCategorizeDialogOpen, setIsCategorizeDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     accountId: "",
     date: getTodayString(),
@@ -180,6 +181,27 @@ export function Transactions() {
 
   const getCategoryName = (id: string | null) =>
     id ? categories.find((c) => c.id === id)?.name || "Uncategorized" : "Uncategorized";
+
+  const handleSelectTransaction = (index: number, event: React.MouseEvent) => {
+    const tx = transactions[index];
+    if (!tx) return;
+
+    if (event.shiftKey && lastClickedIndex !== null) {
+      // Shift-click: select range between last clicked and current
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      for (let i = start; i <= end; i++) {
+        const t = transactions[i];
+        if (t && !selectedIds.has(t.id)) {
+          selectTransaction(t.id);
+        }
+      }
+    } else {
+      // Regular click: toggle single item
+      selectTransaction(tx.id);
+    }
+    setLastClickedIndex(index);
+  };
 
   return (
     <>
@@ -335,7 +357,7 @@ export function Transactions() {
                     </div>
                   </div>
                 ) : (
-                  transactions.map((tx) => (
+                  transactions.map((tx, index) => (
                     <div
                       key={tx.id}
                       className={cn(
@@ -343,11 +365,16 @@ export function Transactions() {
                         selectedIds.has(tx.id) && "bg-accent"
                       )}
                     >
-                      <Checkbox
-                        checked={selectedIds.has(tx.id)}
-                        onCheckedChange={() => selectTransaction(tx.id)}
+                      <div
                         className="shrink-0"
-                      />
+                        onClick={(e) => handleSelectTransaction(index, e)}
+                      >
+                        <Checkbox
+                          checked={selectedIds.has(tx.id)}
+                          onCheckedChange={() => {}}
+                          className="pointer-events-none"
+                        />
+                      </div>
                       <div
                         className={cn(
                           "flex h-10 w-10 items-center justify-center rounded-full shrink-0",

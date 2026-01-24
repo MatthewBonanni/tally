@@ -68,6 +68,7 @@ export function Import() {
   const [useSeparateColumns, setUseSeparateColumns] = useState(false);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -269,16 +270,31 @@ export function Import() {
     }
   }, [accountId, parsedTransactions, selectedTransactions]);
 
-  const toggleTransaction = (index: number) => {
-    setSelectedTransactions((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
-      return next;
-    });
+  const toggleTransaction = (index: number, event?: React.MouseEvent) => {
+    if (event?.shiftKey && lastClickedIndex !== null) {
+      // Shift-click: select range between last clicked and current
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      setSelectedTransactions((prev) => {
+        const next = new Set(prev);
+        for (let i = start; i <= end; i++) {
+          next.add(i);
+        }
+        return next;
+      });
+    } else {
+      // Regular click: toggle single item
+      setSelectedTransactions((prev) => {
+        const next = new Set(prev);
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+        return next;
+      });
+    }
+    setLastClickedIndex(index);
   };
 
   const toggleAll = () => {
@@ -805,21 +821,27 @@ export function Import() {
                     <div
                       key={i}
                       className={cn(
-                        "flex items-center gap-4 p-3 hover:bg-accent",
+                        "flex items-center gap-4 p-3 hover:bg-accent overflow-hidden",
                         !selectedTransactions.has(i) && "opacity-50"
                       )}
                     >
-                      <Checkbox
-                        checked={selectedTransactions.has(i)}
-                        onCheckedChange={() => toggleTransaction(i)}
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium">{tx.payee || "Unknown"}</p>
-                        <p className="text-sm text-muted-foreground">{tx.date}</p>
+                      <div
+                        className="shrink-0"
+                        onClick={(e) => toggleTransaction(i, e)}
+                      >
+                        <Checkbox
+                          checked={selectedTransactions.has(i)}
+                          onCheckedChange={() => {}}
+                          className="pointer-events-none"
+                        />
+                      </div>
+                      <div className="flex-1 w-0">
+                        <p className="font-medium truncate">{tx.payee || "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground truncate">{tx.date}</p>
                       </div>
                       <span
                         className={cn(
-                          "font-semibold",
+                          "font-semibold shrink-0 min-w-[80px] text-right",
                           tx.amount >= 0 ? "text-green-600" : "text-red-600"
                         )}
                       >
