@@ -11,6 +11,8 @@ import {
   Trash2,
   Tags,
   Upload,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Header } from "@/components/layout/Header";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { ImportDialog } from "@/components/import/ImportDialog";
@@ -74,6 +82,8 @@ export function Transactions() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [sortColumn, setSortColumn] = useState<"date" | "payee" | "category" | "account" | "amount">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [formData, setFormData] = useState({
     accountId: "",
     date: getTodayString(),
@@ -90,6 +100,54 @@ export function Transactions() {
       .filter((tx) => selectedIds.has(tx.id))
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [transactions, selectedIds]);
+
+  // Sort transactions
+  const sortedTransactions = useMemo(() => {
+    const sorted = [...transactions].sort((a, b) => {
+      let comparison = 0;
+      switch (sortColumn) {
+        case "date":
+          comparison = a.date.localeCompare(b.date);
+          break;
+        case "payee":
+          comparison = (a.payee || "").localeCompare(b.payee || "");
+          break;
+        case "category":
+          const catA = categories.find((c) => c.id === a.categoryId)?.name || "";
+          const catB = categories.find((c) => c.id === b.categoryId)?.name || "";
+          comparison = catA.localeCompare(catB);
+          break;
+        case "account":
+          const accA = accounts.find((acc) => acc.id === a.accountId)?.name || "";
+          const accB = accounts.find((acc) => acc.id === b.accountId)?.name || "";
+          comparison = accA.localeCompare(accB);
+          break;
+        case "amount":
+          comparison = a.amount - b.amount;
+          break;
+      }
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [transactions, sortColumn, sortDirection, categories, accounts]);
+
+  const handleSort = (column: typeof sortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection(column === "date" ? "desc" : "asc");
+    }
+  };
+
+  const SortIcon = ({ column }: { column: typeof sortColumn }) => {
+    if (sortColumn !== column) return null;
+    return sortDirection === "asc" ? (
+      <ChevronUp className="h-3 w-3 inline ml-0.5" />
+    ) : (
+      <ChevronDown className="h-3 w-3 inline ml-0.5" />
+    );
+  };
 
   useEffect(() => {
     fetchTransactions();
@@ -275,93 +333,120 @@ export function Transactions() {
           </CardContent>
         </Card>
 
-        {/* Bulk Actions */}
-        {selectedIds.size > 0 && (
-          <Card className="mb-4 bg-primary/5 border-primary/20">
-            <CardContent className="py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium">
-                    {selectedIds.size} selected
-                  </span>
-                  <span className={cn(
-                    "text-sm font-semibold",
-                    selectedSum >= 0 ? "text-green-600" : "text-red-600"
-                  )}>
-                    {formatMoney(selectedSum)}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={clearSelection}>
-                    Clear
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setIsCategorizeDialogOpen(true)}>
-                    <Tags className="h-4 w-4 mr-2" />
-                    Categorize
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDelete}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Transaction List */}
         <Card>
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle>All Transactions</CardTitle>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={
-                    transactions.length > 0 &&
-                    selectedIds.size === transactions.length
-                  }
-                  onCheckedChange={(checked) =>
-                    checked ? selectAll() : clearSelection()
-                  }
-                />
-                <span className="text-sm text-muted-foreground">Select all</span>
-              </div>
+            <div className="flex items-center justify-between h-9">
+              <CardTitle className={selectedIds.size > 0 ? "sr-only" : ""}>All Transactions</CardTitle>
+              {selectedIds.size > 0 && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">
+                      {selectedIds.size} selected
+                    </span>
+                    <span className={cn(
+                      "text-sm font-semibold font-mono",
+                      selectedSum >= 0 ? "text-green-600" : "text-red-600"
+                    )}>
+                      {formatMoney(selectedSum)}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={clearSelection}>
+                      Clear
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setIsCategorizeDialogOpen(true)}>
+                      <Tags className="h-4 w-4 mr-2" />
+                      Categorize
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDelete}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[500px]">
-              <div className="space-y-1">
-                {transactions.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <ArrowLeftRight className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                    <p className="text-lg">No transactions yet</p>
-                    <p className="text-sm">
-                      Add transactions manually or import from your bank
-                    </p>
-                    <div className="flex gap-2 justify-center mt-4">
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsImportDialogOpen(true)}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Import
-                      </Button>
-                      <Button onClick={() => handleOpenDialog()}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Transaction
-                      </Button>
-                    </div>
+            {transactions.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <ArrowLeftRight className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p className="text-lg">No transactions yet</p>
+                <p className="text-sm">
+                  Add transactions manually or import from your bank
+                </p>
+                <div className="flex gap-2 justify-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsImportDialogOpen(true)}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import
+                  </Button>
+                  <Button onClick={() => handleOpenDialog()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Transaction
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 px-2 py-1 border-b mb-1 text-xs text-muted-foreground font-medium">
+                  <div className="shrink-0">
+                    <Checkbox
+                      checked={
+                        transactions.length > 0 &&
+                        selectedIds.size === transactions.length
+                      }
+                      onCheckedChange={(checked) =>
+                        checked ? selectAll() : clearSelection()
+                      }
+                    />
                   </div>
-                ) : (
-                  transactions.map((tx, index) => (
+                  <button
+                    className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("date")}
+                  >
+                    Date<SortIcon column="date" />
+                  </button>
+                  <button
+                    className="w-0 flex-1 text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("payee")}
+                  >
+                    Payee<SortIcon column="payee" />
+                  </button>
+                  <button
+                    className="shrink-0 w-[120px] text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("category")}
+                  >
+                    Category<SortIcon column="category" />
+                  </button>
+                  <button
+                    className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("account")}
+                  >
+                    Account<SortIcon column="account" />
+                  </button>
+                  <button
+                    className="shrink-0 w-[110px] text-right hover:text-foreground transition-colors"
+                    onClick={() => handleSort("amount")}
+                  >
+                    Amount<SortIcon column="amount" />
+                  </button>
+                  <span className="shrink-0 w-6"></span>
+                </div>
+                <ScrollArea className="h-[500px]">
+                  <div className="space-y-1">
+                    {sortedTransactions.map((tx, index) => (
                     <div
                       key={tx.id}
                       className={cn(
-                        "flex items-center gap-2 px-2 py-1 rounded hover:bg-accent transition-colors overflow-hidden",
+                        "flex items-center gap-2 px-2 py-1 rounded hover:bg-accent transition-colors overflow-hidden select-none",
                         selectedIds.has(tx.id) && "bg-accent"
                       )}
                     >
@@ -378,10 +463,19 @@ export function Transactions() {
                       <span className="text-sm text-muted-foreground shrink-0 w-[100px] whitespace-nowrap">
                         {formatDate(tx.date)}
                       </span>
-                      <span className="text-sm font-medium truncate w-0 flex-1">
-                        {tx.payee || "Unknown"}
-                        {tx.transferId && " ↔"}
-                      </span>
+                      <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-sm font-medium truncate w-0 flex-1 cursor-default">
+                              {tx.payee || "Unknown"}
+                              {tx.transferId && " ↔"}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="select-text">{tx.payee || "Unknown"}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <span className="text-sm text-muted-foreground truncate shrink-0 w-[120px]">
                         {getCategoryName(tx.categoryId)}
                       </span>
@@ -390,7 +484,7 @@ export function Transactions() {
                       </span>
                       <span
                         className={cn(
-                          "text-sm font-semibold shrink-0 text-right w-[80px]",
+                          "text-sm font-semibold font-mono shrink-0 text-right w-[110px] whitespace-nowrap",
                           tx.amount >= 0 ? "text-green-600" : "text-red-600"
                         )}
                       >
@@ -418,10 +512,11 @@ export function Transactions() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
+                  ))}
+                  </div>
+                </ScrollArea>
+              </>
+            )}
           </CardContent>
         </Card>
       </PageContainer>
