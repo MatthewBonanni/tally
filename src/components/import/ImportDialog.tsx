@@ -8,6 +8,7 @@ import {
   Check,
   AlertCircle,
   Wallet,
+  ArrowLeftRight,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
@@ -36,16 +37,19 @@ import {
   parseBoaFile,
   previewPdfFile,
   parsePdfFile,
+  detectTransfers,
+  linkTransfer,
   type CsvPreview,
   type ColumnMapping,
   type ParsedTransaction,
   type BoaPreview,
   type PdfPreview,
 } from "@/lib/tauri";
+import type { TransferCandidate } from "@/types";
 import { formatMoney } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-type Step = "upload" | "mapping" | "preview" | "complete";
+type Step = "upload" | "mapping" | "preview" | "transfers" | "complete";
 type FileType = "csv" | "boa" | "pdf";
 
 interface ImportDialogProps {
@@ -78,7 +82,8 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [selectedTransactions, setSelectedTransactions] = useState<Set<number>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; categorized: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; categorized: number; transfersLinked: number } | null>(null);
+  const [transferCandidates, setTransferCandidates] = useState<TransferCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -102,6 +107,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         setParsedTransactions([]);
         setSelectedTransactions(new Set());
         setImportResult(null);
+        setTransferCandidates([]);
         setError(null);
         setAccountId("");
       }, 200);
@@ -285,7 +291,21 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         }));
 
       const result = await importTransactions(accountId, transactionsToImport);
-      setImportResult({ imported: result.imported, skipped: result.skipped, categorized: result.categorized });
+      setImportResult({ imported: result.imported, skipped: result.skipped, categorized: result.categorized, transfersLinked: 0 });
+
+      // Detect potential transfers after import
+      if (result.imported > 0) {
+        try {
+          const candidates = await detectTransfers();
+          if (candidates.length > 0) {
+            setTransferCandidates(candidates);
+            setStep("transfers");
+            return;
+          }
+        } catch {
+          // Ignore transfer detection errors, just skip to complete
+        }
+      }
       setStep("complete");
     } catch (err) {
       setError(String(err));
@@ -345,7 +365,36 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
     onOpenChange(false);
   };
 
-  const stepLabels = ["Select File", "Configure", "Review", "Done"];
+  const handleLinkTransfer = async (candidate: TransferCandidate) => {
+    setLoading(true);
+    try {
+      await linkTransfer(candidate.transactionA.id, candidate.transactionB.id);
+      // Remove this candidate from the list
+      setTransferCandidates((prev) => prev.filter((c) => c !== candidate));
+      // Update the linked count
+      setImportResult((prev) =>
+        prev ? { ...prev, transfersLinked: prev.transfersLinked + 1 } : prev
+      );
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkipTransfer = (candidate: TransferCandidate) => {
+    setTransferCandidates((prev) => prev.filter((c) => c !== candidate));
+  };
+
+  const handleFinishTransfers = () => {
+    setStep("complete");
+  };
+
+  const getAccountNameById = (id: string) =>
+    accounts.find((a) => a.id === id)?.name || "Unknown Account";
+
+  const stepLabels = ["Select File", "Configure", "Review", "Transfers", "Done"];
+  const allSteps: Step[] = ["upload", "mapping", "preview", "transfers", "complete"];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -356,7 +405,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           </div>
           {/* Progress Steps */}
           <div className="flex items-center justify-center pt-4">
-            {(["upload", "mapping", "preview", "complete"] as Step[]).map((s, i) => (
+            {allSteps.map((s, i) => (
               <div key={s} className="flex items-center">
                 <div className="flex flex-col items-center">
                   <div
@@ -364,12 +413,12 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                       "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
                       step === s
                         ? "bg-primary text-primary-foreground"
-                        : ["upload", "mapping", "preview", "complete"].indexOf(step) > i
+                        : allSteps.indexOf(step) > i
                         ? "bg-green-500 text-white"
                         : "bg-muted text-muted-foreground"
                     )}
                   >
-                    {["upload", "mapping", "preview", "complete"].indexOf(step) > i ? (
+                    {allSteps.indexOf(step) > i ? (
                       <Check className="h-4 w-4" />
                     ) : (
                       i + 1
@@ -377,11 +426,11 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                   </div>
                   <span className="text-xs mt-1 text-muted-foreground">{stepLabels[i]}</span>
                 </div>
-                {i < 3 && (
+                {i < allSteps.length - 1 && (
                   <div
                     className={cn(
-                      "h-0.5 w-12 mx-2 mb-5",
-                      ["upload", "mapping", "preview", "complete"].indexOf(step) > i
+                      "h-0.5 w-8 mx-1 mb-5",
+                      allSteps.indexOf(step) > i
                         ? "bg-green-500"
                         : "bg-muted"
                     )}
@@ -883,7 +932,111 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
             </div>
           )}
 
-          {/* Step 4: Complete */}
+          {/* Step 4: Transfers */}
+          {step === "transfers" && (
+            <div className="space-y-4">
+              <div className="text-center pb-2">
+                <h3 className="text-lg font-semibold">Potential Transfers Detected</h3>
+                <p className="text-sm text-muted-foreground">
+                  We found transactions that might be transfers between your accounts.
+                  Linking them prevents double-counting in your income/spending reports.
+                </p>
+              </div>
+
+              {transferCandidates.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <ArrowLeftRight className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p>No more transfer candidates to review</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[350px]">
+                  <div className="space-y-3">
+                    {transferCandidates.map((candidate, i) => (
+                      <div
+                        key={i}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Confidence: {Math.round(candidate.confidence * 100)}%</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          {/* Transaction A */}
+                          <div className="flex-1 p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {getAccountNameById(candidate.transactionA.accountId)}
+                            </p>
+                            <p className="font-medium truncate">
+                              {candidate.transactionA.payee || "Unknown"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {candidate.transactionA.date}
+                            </p>
+                            <p
+                              className={cn(
+                                "font-semibold mt-1",
+                                candidate.transactionA.amount >= 0
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              )}
+                            >
+                              {formatMoney(candidate.transactionA.amount)}
+                            </p>
+                          </div>
+
+                          <ArrowLeftRight className="h-5 w-5 text-muted-foreground shrink-0" />
+
+                          {/* Transaction B */}
+                          <div className="flex-1 p-3 bg-muted rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {getAccountNameById(candidate.transactionB.accountId)}
+                            </p>
+                            <p className="font-medium truncate">
+                              {candidate.transactionB.payee || "Unknown"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {candidate.transactionB.date}
+                            </p>
+                            <p
+                              className={cn(
+                                "font-semibold mt-1",
+                                candidate.transactionB.amount >= 0
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              )}
+                            >
+                              {formatMoney(candidate.transactionB.amount)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSkipTransfer(candidate)}
+                            disabled={loading}
+                          >
+                            Not a Transfer
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleLinkTransfer(candidate)}
+                            disabled={loading}
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Link Transfer
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          )}
+
+          {/* Step 5: Complete */}
           {step === "complete" && importResult && (
             <div className="text-center py-8">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto mb-6">
@@ -897,6 +1050,11 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
               {importResult.categorized > 0 && (
                 <p className="text-sm text-green-600 mt-2">
                   {importResult.categorized} transaction{importResult.categorized === 1 ? " was" : "s were"} automatically categorized
+                </p>
+              )}
+              {importResult.transfersLinked > 0 && (
+                <p className="text-sm text-purple-600 mt-2">
+                  {importResult.transfersLinked} transfer{importResult.transfersLinked === 1 ? " was" : "s were"} linked between accounts
                 </p>
               )}
             </div>
@@ -942,6 +1100,17 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
             </>
           )}
 
+          {step === "transfers" && (
+            <>
+              <Button variant="outline" onClick={handleFinishTransfers}>
+                Skip All
+              </Button>
+              <Button onClick={handleFinishTransfers} disabled={loading}>
+                {transferCandidates.length === 0 ? "Continue" : `Continue (${transferCandidates.length} remaining)`}
+              </Button>
+            </>
+          )}
+
           {step === "complete" && (
             <>
               <Button
@@ -954,6 +1123,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                   setPdfPreview(null);
                   setParsedTransactions([]);
                   setImportResult(null);
+                  setTransferCandidates([]);
                 }}
               >
                 Import More
