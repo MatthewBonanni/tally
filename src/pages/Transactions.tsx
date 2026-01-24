@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from "react";
 import {
   Plus,
   Search,
-  Filter,
   ArrowUpRight,
   ArrowDownRight,
   ArrowLeftRight,
@@ -96,6 +95,8 @@ export function Transactions() {
     categoryId: "",
     notes: "",
   });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>([]);
 
   // Compute sum of selected transactions
   const selectedSum = useMemo(() => {
@@ -118,15 +119,6 @@ export function Transactions() {
 
   const clearAllFilters = () => {
     setFilters({
-      searchQuery: "",
-      accountId: null,
-      categoryId: null,
-      startDate: null,
-      endDate: null,
-      minAmount: null,
-      maxAmount: null,
-    });
-    fetchTransactions({
       searchQuery: "",
       accountId: null,
       categoryId: null,
@@ -190,6 +182,23 @@ export function Transactions() {
     fetchAccounts();
     fetchCategories();
   }, [fetchTransactions, fetchAccounts, fetchCategories]);
+
+  // Auto-fetch when filters change (with debounce for search)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchTransactions(filters);
+    }, filters.searchQuery ? 300 : 0);
+    return () => clearTimeout(timeoutId);
+  }, [
+    filters.searchQuery,
+    filters.accountId,
+    filters.categoryId,
+    filters.startDate,
+    filters.endDate,
+    filters.minAmount,
+    filters.maxAmount,
+    fetchTransactions,
+  ]);
 
   const handleOpenDialog = (transaction?: Transaction) => {
     if (transaction) {
@@ -255,11 +264,17 @@ export function Transactions() {
     setIsDialogOpen(false);
   };
 
-  const handleDelete = async () => {
-    if (selectedIds.size === 0) return;
-    if (confirm(`Delete ${selectedIds.size} transaction(s)?`)) {
-      await deleteTransactions(Array.from(selectedIds));
-    }
+  const handleDelete = (ids?: string[]) => {
+    const idsToDelete = ids || Array.from(selectedIds);
+    if (idsToDelete.length === 0) return;
+    setPendingDeleteIds(idsToDelete);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    await deleteTransactions(pendingDeleteIds);
+    setDeleteConfirmOpen(false);
+    setPendingDeleteIds([]);
   };
 
   const handleBulkCategorize = async () => {
@@ -381,10 +396,6 @@ export function Transactions() {
                       </span>
                     )}
                   </Button>
-                  <Button onClick={() => fetchTransactions()} className="h-9 shrink-0">
-                    <Filter className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Apply</span>
-                  </Button>
                   {(activeFilterCount > 0 || filters.searchQuery) && (
                     <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 text-muted-foreground shrink-0">
                       <X className="h-4 w-4 sm:mr-1" />
@@ -478,7 +489,7 @@ export function Transactions() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={handleDelete}
+                      onClick={() => handleDelete()}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
@@ -620,7 +631,7 @@ export function Transactions() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => deleteTransactions([tx.id])}
+                            onClick={() => handleDelete([tx.id])}
                             className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
@@ -833,6 +844,26 @@ export function Transactions() {
             </Button>
             <Button onClick={handleBulkCategorize} disabled={!selectedCategoryId}>
               Apply Category
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Transaction{pendingDeleteIds.length === 1 ? "" : "s"}</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {pendingDeleteIds.length} transaction{pendingDeleteIds.length === 1 ? "" : "s"}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
