@@ -320,8 +320,8 @@ export function Transactions() {
           <CardContent className="py-3">
             <div className="flex flex-col gap-3">
               {/* Primary filter row */}
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1 max-w-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[180px]">
                   <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search transactions..."
@@ -336,7 +336,7 @@ export function Transactions() {
                     setFilters({ accountId: value === "all" ? null : value });
                   }}
                 >
-                  <SelectTrigger className="h-9 w-[140px]">
+                  <SelectTrigger className="h-9 w-[130px]">
                     <SelectValue placeholder="Account" />
                   </SelectTrigger>
                   <SelectContent>
@@ -354,7 +354,7 @@ export function Transactions() {
                     setFilters({ categoryId: value === "all" ? null : value });
                   }}
                 >
-                  <SelectTrigger className="h-9 w-[140px]">
+                  <SelectTrigger className="h-9 w-[130px]">
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -366,35 +366,37 @@ export function Transactions() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  className={cn("h-9 gap-1.5", showAdvancedFilters && "bg-accent")}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  More
-                  {activeFilterCount > 0 && (
-                    <span className="ml-1 rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </Button>
-                <Button onClick={() => fetchTransactions()} className="h-9">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Apply
-                </Button>
-                {(activeFilterCount > 0 || filters.searchQuery) && (
-                  <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 text-muted-foreground">
-                    <X className="h-4 w-4 mr-1" />
-                    Clear
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    className={cn("h-9 gap-1.5 shrink-0", showAdvancedFilters && "bg-accent")}
+                  >
+                    <SlidersHorizontal className="h-4 w-4" />
+                    <span className="hidden sm:inline">More</span>
+                    {activeFilterCount > 0 && (
+                      <span className="rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                        {activeFilterCount}
+                      </span>
+                    )}
                   </Button>
-                )}
+                  <Button onClick={() => fetchTransactions()} className="h-9 shrink-0">
+                    <Filter className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Apply</span>
+                  </Button>
+                  {(activeFilterCount > 0 || filters.searchQuery) && (
+                    <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 text-muted-foreground shrink-0">
+                      <X className="h-4 w-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Advanced filters */}
               {showAdvancedFilters && (
-                <div className="flex items-center gap-3 pt-2 border-t">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 border-t">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Date:</span>
                     <Input
@@ -509,52 +511,53 @@ export function Transactions() {
                 </div>
               </div>
             ) : (
-              <>
-                <div className="flex items-center gap-2 px-2 py-1 border-b mb-1 text-xs text-muted-foreground font-medium">
-                  <div className="shrink-0">
-                    <Checkbox
-                      checked={
-                        transactions.length > 0 &&
-                        selectedIds.size === transactions.length
-                      }
-                      onCheckedChange={(checked) =>
-                        checked ? selectAll() : clearSelection()
-                      }
-                    />
+              <div className="flex-1 flex flex-col min-h-0 overflow-x-auto">
+                <div className="min-w-[700px]">
+                  <div className="flex items-center gap-2 px-2 py-1 border-b mb-1 text-xs text-muted-foreground font-medium">
+                    <div className="shrink-0">
+                      <Checkbox
+                        checked={
+                          transactions.length > 0 &&
+                          selectedIds.size === transactions.length
+                        }
+                        onCheckedChange={(checked) =>
+                          checked ? selectAll() : clearSelection()
+                        }
+                      />
+                    </div>
+                    <button
+                      className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
+                      onClick={() => handleSort("date")}
+                    >
+                      Date<SortIcon column="date" />
+                    </button>
+                    <button
+                      className="w-0 flex-1 text-left hover:text-foreground transition-colors"
+                      onClick={() => handleSort("payee")}
+                    >
+                      Payee<SortIcon column="payee" />
+                    </button>
+                    <button
+                      className="shrink-0 w-[120px] text-left hover:text-foreground transition-colors"
+                      onClick={() => handleSort("category")}
+                    >
+                      Category<SortIcon column="category" />
+                    </button>
+                    <button
+                      className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
+                      onClick={() => handleSort("account")}
+                    >
+                      Account<SortIcon column="account" />
+                    </button>
+                    <button
+                      className="shrink-0 w-[110px] text-right hover:text-foreground transition-colors"
+                      onClick={() => handleSort("amount")}
+                    >
+                      Amount<SortIcon column="amount" />
+                    </button>
+                    <span className="shrink-0 w-6"></span>
                   </div>
-                  <button
-                    className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
-                    onClick={() => handleSort("date")}
-                  >
-                    Date<SortIcon column="date" />
-                  </button>
-                  <button
-                    className="w-0 flex-1 text-left hover:text-foreground transition-colors"
-                    onClick={() => handleSort("payee")}
-                  >
-                    Payee<SortIcon column="payee" />
-                  </button>
-                  <button
-                    className="shrink-0 w-[120px] text-left hover:text-foreground transition-colors"
-                    onClick={() => handleSort("category")}
-                  >
-                    Category<SortIcon column="category" />
-                  </button>
-                  <button
-                    className="shrink-0 w-[100px] text-left hover:text-foreground transition-colors"
-                    onClick={() => handleSort("account")}
-                  >
-                    Account<SortIcon column="account" />
-                  </button>
-                  <button
-                    className="shrink-0 w-[110px] text-right hover:text-foreground transition-colors"
-                    onClick={() => handleSort("amount")}
-                  >
-                    Amount<SortIcon column="amount" />
-                  </button>
-                  <span className="shrink-0 w-6"></span>
-                </div>
-                <ScrollArea className="flex-1 min-h-0">
+                  <ScrollArea className="flex-1 min-h-0">
                   <div className="space-y-1">
                     {sortedTransactions.map((tx, index) => (
                     <div
@@ -628,8 +631,9 @@ export function Transactions() {
                     </div>
                   ))}
                   </div>
-                </ScrollArea>
-              </>
+                  </ScrollArea>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
