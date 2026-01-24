@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Upload,
   FileSpreadsheet,
-  ChevronRight,
   ChevronLeft,
   ChevronUp,
   ChevronDown,
@@ -11,7 +10,7 @@ import {
   AlertCircle,
   Wallet,
   ArrowLeftRight,
-  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
@@ -52,7 +51,7 @@ import type { TransferCandidate } from "@/types";
 import { formatMoney } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
-type Step = "upload" | "mapping" | "preview" | "transfers" | "complete";
+type Step = "upload" | "review" | "transfers" | "complete";
 type FileType = "csv" | "boa" | "pdf";
 
 interface ImportDialogProps {
@@ -89,7 +88,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
   const [transferCandidates, setTransferCandidates] = useState<TransferCandidate[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sortColumn, setSortColumn] = useState<"date" | "payee" | "amount">("date");
+  const [sortColumn, setSortColumn] = useState<"date" | "payee" | "category" | "amount">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   // Sort parsed transactions
@@ -103,6 +102,9 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           break;
         case "payee":
           comparison = (a.tx.payee || "").localeCompare(b.tx.payee || "");
+          break;
+        case "category":
+          comparison = (a.tx.categoryHint || "").localeCompare(b.tx.categoryHint || "");
           break;
         case "amount":
           comparison = a.tx.amount - b.tx.amount;
@@ -179,6 +181,8 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
 
         if (isPdfFile) {
           setLoading(true);
+          // Allow UI to render loading state before heavy processing
+          await new Promise((resolve) => setTimeout(resolve, 50));
           try {
             const preview = await previewPdfFile(selected);
             if (preview.transactions.length > 0) {
@@ -186,7 +190,19 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
               setPdfPreview(preview);
               setCsvPreview(null);
               setBoaPreview(null);
-              setStep("mapping");
+              // Parse immediately
+              const pdfTx = await parsePdfFile(selected);
+              const transactions: ParsedTransaction[] = pdfTx.map((tx) => ({
+                date: tx.date,
+                amount: tx.amount,
+                payee: tx.payee,
+                memo: tx.memo,
+                categoryHint: tx.pdfCategory,
+                rawData: {},
+              }));
+              setParsedTransactions(transactions);
+              setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+              setStep("review");
               return;
             } else {
               setError("No transactions found in PDF. Try exporting as CSV from your bank.");
@@ -201,6 +217,9 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         }
 
         if (isTxtFile) {
+          setLoading(true);
+          // Allow UI to render loading state before heavy processing
+          await new Promise((resolve) => setTimeout(resolve, 50));
           try {
             const preview = await previewBoaFile(selected);
             if (preview.transactions.length > 0) {
@@ -208,14 +227,30 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
               setBoaPreview(preview);
               setCsvPreview(null);
               setPdfPreview(null);
-              setStep("mapping");
+              // Parse immediately
+              const boaTx = await parseBoaFile(selected);
+              const transactions: ParsedTransaction[] = boaTx.map((tx) => ({
+                date: tx.date,
+                amount: tx.amount,
+                payee: tx.payee,
+                memo: tx.memo,
+                rawData: {},
+              }));
+              setParsedTransactions(transactions);
+              setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+              setStep("review");
               return;
             }
           } catch {
             // Fall back to CSV if BoA parsing fails
+          } finally {
+            setLoading(false);
           }
         }
 
+        setLoading(true);
+        // Allow UI to render loading state before heavy processing
+        await new Promise((resolve) => setTimeout(resolve, 50));
         setFileType("csv");
         setBoaPreview(null);
         setPdfPreview(null);
@@ -242,21 +277,40 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           ["memo", "note", "notes", "reference"].includes(h)
         );
 
-        setColumnMapping((prev) => ({
-          ...prev,
+        const hasSeparateColumns = debitIdx >= 0 && creditIdx >= 0;
+        const detectedMapping: ColumnMapping = {
           dateColumn: dateIdx >= 0 ? dateIdx : 0,
           amountColumn: amountIdx >= 0 ? amountIdx : 1,
           debitColumn: debitIdx >= 0 ? debitIdx : undefined,
           creditColumn: creditIdx >= 0 ? creditIdx : undefined,
           payeeColumn: payeeIdx >= 0 ? payeeIdx : undefined,
           memoColumn: memoIdx >= 0 ? memoIdx : undefined,
-        }));
+          dateFormat: "",
+          invertAmounts: false,
+        };
 
-        setUseSeparateColumns(debitIdx >= 0 && creditIdx >= 0);
-        setStep("mapping");
+        setColumnMapping(detectedMapping);
+        setUseSeparateColumns(hasSeparateColumns);
+
+        // Parse immediately with detected mapping
+        const mapping: ColumnMapping = hasSeparateColumns
+          ? { ...detectedMapping, amountColumn: 0 }
+          : { ...detectedMapping, debitColumn: undefined, creditColumn: undefined };
+
+        try {
+          const transactions = await parseCsvFile(selected, mapping);
+          setParsedTransactions(transactions);
+          setSelectedTransactions(new Set(transactions.map((_, i) => i)));
+        } catch (err) {
+          setError(String(err));
+        }
+
+        setLoading(false);
+        setStep("review");
       }
     } catch (err) {
       setError(String(err));
+      setLoading(false);
     }
   }, []);
 
@@ -277,7 +331,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         }));
         setParsedTransactions(transactions);
         setSelectedTransactions(new Set(transactions.map((_, i) => i)));
-        setStep("preview");
+        setStep("review");
       } else if (fileType === "pdf") {
         const pdfTx = await parsePdfFile(filePath);
         const transactions: ParsedTransaction[] = pdfTx.map((tx) => ({
@@ -290,7 +344,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         }));
         setParsedTransactions(transactions);
         setSelectedTransactions(new Set(transactions.map((_, i) => i)));
-        setStep("preview");
+        setStep("review");
       } else {
         const mapping: ColumnMapping = useSeparateColumns
           ? {
@@ -308,7 +362,7 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
         const transactions = await parseCsvFile(filePath, mapping);
         setParsedTransactions(transactions);
         setSelectedTransactions(new Set(transactions.map((_, i) => i)));
-        setStep("preview");
+        setStep("review");
       }
     } catch (err) {
       setError(String(err));
@@ -432,8 +486,8 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
   const getAccountNameById = (id: string) =>
     accounts.find((a) => a.id === id)?.name || "Unknown Account";
 
-  const stepLabels = ["Select File", "Configure", "Review", "Transfers", "Done"];
-  const allSteps: Step[] = ["upload", "mapping", "preview", "transfers", "complete"];
+  const stepLabels = ["Select File", "Review", "Transfers", "Done"];
+  const allSteps: Step[] = ["upload", "review", "transfers", "complete"];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -489,38 +543,45 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
           )}
 
           {/* Step 1: Upload */}
-          {step === "upload" && (
+          {step === "upload" && !loading && (
             <div className="space-y-4">
               <div
-                className={cn(
-                  "border-2 border-dashed rounded-lg p-12 text-center transition-colors",
-                  loading ? "cursor-default" : "cursor-pointer hover:border-primary"
-                )}
-                onClick={loading ? undefined : handleSelectFile}
+                className="border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer hover:border-primary"
+                onClick={handleSelectFile}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-12 w-12 mx-auto mb-4 text-primary animate-spin" />
-                    <p className="text-lg font-medium">Processing PDF...</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Extracting transactions from your statement
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-lg font-medium">Click to select a file</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Supports CSV, PDF, and Bank of America TXT statements
-                    </p>
-                  </>
-                )}
+                <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-lg font-medium">Click to select a file</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Supports CSV, PDF, and Bank of America TXT statements
+                </p>
               </div>
             </div>
           )}
 
+          {/* Loading state between file selection and review */}
+          {step === "upload" && loading && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="relative">
+                <div className="h-16 w-16 rounded-full border-4 border-muted" />
+                <div className="absolute inset-0 h-16 w-16 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+              </div>
+              <p className="text-lg font-medium mt-6">
+                {fileName?.toLowerCase().endsWith(".pdf")
+                  ? "Processing PDF..."
+                  : fileName?.toLowerCase().endsWith(".txt")
+                  ? "Processing statement..."
+                  : "Parsing transactions..."}
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {fileName && (
+                  <span className="font-medium">{fileName}</span>
+                )}
+              </p>
+            </div>
+          )}
+
           {/* Step 2: Column Mapping - CSV */}
-          {step === "mapping" && csvPreview && fileType === "csv" && (
+          {step === "review" && csvPreview && fileType === "csv" && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                 <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
@@ -711,40 +772,21 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                 </div>
               )}
 
-              <div>
-                <Label className="mb-2 block">Preview</Label>
-                <div className="border rounded-lg overflow-hidden">
-                  <ScrollArea className="h-[150px]">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted sticky top-0">
-                        <tr>
-                          {csvPreview.headers.map((header, i) => (
-                            <th key={i} className="px-3 py-2 text-left font-medium">
-                              {header || `Col ${i + 1}`}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {csvPreview.rows.slice(0, 5).map((row, i) => (
-                          <tr key={i} className="border-t">
-                            {row.map((cell, j) => (
-                              <td key={j} className="px-3 py-2 truncate max-w-[150px]">
-                                {cell}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </ScrollArea>
-                </div>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleParseFile}
+                disabled={loading}
+                className="w-full"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                Refresh Preview
+              </Button>
             </div>
           )}
 
           {/* Step 2: BoA File */}
-          {step === "mapping" && fileType === "boa" && boaPreview && (
+          {step === "review" && fileType === "boa" && boaPreview && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                 <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
@@ -809,34 +851,11 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                 )}
               </div>
 
-              <div>
-                <Label className="mb-2 block">Preview (first 10 transactions)</Label>
-                <ScrollArea className="h-[200px] border rounded-lg">
-                  <div className="divide-y">
-                    {boaPreview.transactions.slice(0, 10).map((tx, i) => (
-                      <div key={i} className="flex items-center justify-between p-3">
-                        <div className="flex-1 min-w-0 mr-4">
-                          <p className="font-medium truncate">{tx.description}</p>
-                          <p className="text-sm text-muted-foreground">{tx.date}</p>
-                        </div>
-                        <span
-                          className={cn(
-                            "font-semibold font-mono",
-                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
-                          )}
-                        >
-                          {formatMoney(tx.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
             </div>
           )}
 
           {/* Step 2: PDF File */}
-          {step === "mapping" && fileType === "pdf" && pdfPreview && (
+          {step === "review" && fileType === "pdf" && pdfPreview && (
             <div className="space-y-6">
               {/* Confidence Warning */}
               {pdfPreview.confidence < 0.7 && (
@@ -895,35 +914,12 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                 )}
               </div>
 
-              <div>
-                <Label className="mb-2 block">Preview (first 10 transactions)</Label>
-                <ScrollArea className="h-[200px] border rounded-lg">
-                  <div className="divide-y">
-                    {pdfPreview.transactions.slice(0, 10).map((tx, i) => (
-                      <div key={i} className="flex items-center justify-between p-3">
-                        <div className="flex-1 min-w-0 mr-4">
-                          <p className="font-medium truncate">{tx.description}</p>
-                          <p className="text-sm text-muted-foreground">{tx.date}</p>
-                        </div>
-                        <span
-                          className={cn(
-                            "font-semibold font-mono",
-                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
-                          )}
-                        >
-                          {formatMoney(tx.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
             </div>
           )}
 
-          {/* Step 3: Preview & Confirm */}
-          {step === "preview" && (
-            <div className="space-y-2">
+          {/* Transactions List */}
+          {step === "review" && (
+            <div className="space-y-2 mt-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium">
@@ -967,6 +963,12 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                     Payee<SortIcon column="payee" />
                   </button>
                   <button
+                    className="shrink-0 w-[120px] text-left hover:text-foreground transition-colors"
+                    onClick={() => handleSort("category")}
+                  >
+                    Category<SortIcon column="category" />
+                  </button>
+                  <button
                     className="shrink-0 w-[110px] text-right hover:text-foreground transition-colors"
                     onClick={() => handleSort("amount")}
                   >
@@ -1000,6 +1002,9 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
                         </span>
                         <span className="text-sm font-medium truncate w-0 flex-1">
                           {tx.payee || "Unknown"}
+                        </span>
+                        <span className="text-sm text-muted-foreground truncate shrink-0 w-[120px]">
+                          {tx.categoryHint || "—"}
                         </span>
                         <span
                           className={cn(
@@ -1157,28 +1162,15 @@ export function ImportDialog({ open: isOpen, onOpenChange, onComplete }: ImportD
             </>
           )}
 
-          {step === "mapping" && (
+          {step === "review" && (
             <>
               <Button variant="outline" onClick={() => setStep("upload")}>
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <Button onClick={handleParseFile} disabled={loading || !accountId}>
-                {loading ? "Parsing..." : "Continue"}
-                <ChevronRight className="h-4 w-4 ml-2" />
-              </Button>
-            </>
-          )}
-
-          {step === "preview" && (
-            <>
-              <Button variant="outline" onClick={() => setStep("mapping")}>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
               <Button
                 onClick={handleImport}
-                disabled={loading || selectedTransactions.size === 0}
+                disabled={loading || selectedTransactions.size === 0 || !accountId}
               >
                 {loading ? "Importing..." : `Import ${selectedTransactions.size} Transactions`}
               </Button>
