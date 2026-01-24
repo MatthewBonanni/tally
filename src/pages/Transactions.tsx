@@ -13,6 +13,8 @@ import {
   Upload,
   ChevronUp,
   ChevronDown,
+  X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,6 +86,7 @@ export function Transactions() {
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [sortColumn, setSortColumn] = useState<"date" | "payee" | "category" | "account" | "amount">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [formData, setFormData] = useState({
     accountId: "",
     date: getTodayString(),
@@ -100,6 +103,39 @@ export function Transactions() {
       .filter((tx) => selectedIds.has(tx.id))
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [transactions, selectedIds]);
+
+  // Count active filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.accountId) count++;
+    if (filters.categoryId) count++;
+    if (filters.startDate) count++;
+    if (filters.endDate) count++;
+    if (filters.minAmount !== null) count++;
+    if (filters.maxAmount !== null) count++;
+    return count;
+  }, [filters]);
+
+  const clearAllFilters = () => {
+    setFilters({
+      searchQuery: "",
+      accountId: null,
+      categoryId: null,
+      startDate: null,
+      endDate: null,
+      minAmount: null,
+      maxAmount: null,
+    });
+    fetchTransactions({
+      searchQuery: "",
+      accountId: null,
+      categoryId: null,
+      startDate: null,
+      endDate: null,
+      minAmount: null,
+      maxAmount: null,
+    });
+  };
 
   // Sort transactions
   const sortedTransactions = useMemo(() => {
@@ -278,63 +314,141 @@ export function Transactions() {
           </div>
         }
       />
-      <PageContainer>
+      <PageContainer className="flex flex-col">
         {/* Filters */}
-        <Card className="mb-4">
-          <CardContent className="pt-4">
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Card className="mb-4 shrink-0">
+          <CardContent className="py-3">
+            <div className="flex flex-col gap-3">
+              {/* Primary filter row */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search transactions..."
                     value={filters.searchQuery}
                     onChange={(e) => setFilters({ searchQuery: e.target.value })}
-                    className="pl-9"
+                    className="pl-8 h-9"
                   />
                 </div>
+                <Select
+                  value={filters.accountId || "all"}
+                  onValueChange={(value) => {
+                    setFilters({ accountId: value === "all" ? null : value });
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-[140px]">
+                    <SelectValue placeholder="Account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Accounts</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filters.categoryId || "all"}
+                  onValueChange={(value) => {
+                    setFilters({ categoryId: value === "all" ? null : value });
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-[140px]">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className={cn("h-9 gap-1.5", showAdvancedFilters && "bg-accent")}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  More
+                  {activeFilterCount > 0 && (
+                    <span className="ml-1 rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+                <Button onClick={() => fetchTransactions()} className="h-9">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Apply
+                </Button>
+                {(activeFilterCount > 0 || filters.searchQuery) && (
+                  <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 text-muted-foreground">
+                    <X className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                )}
               </div>
-              <Select
-                value={filters.accountId || "all"}
-                onValueChange={(value) =>
-                  setFilters({ accountId: value === "all" ? null : value })
-                }
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="All Accounts" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Accounts</SelectItem>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="date"
-                value={filters.startDate || ""}
-                onChange={(e) => setFilters({ startDate: e.target.value || null })}
-                className="w-[150px]"
-              />
-              <span className="flex items-center text-muted-foreground">to</span>
-              <Input
-                type="date"
-                value={filters.endDate || ""}
-                onChange={(e) => setFilters({ endDate: e.target.value || null })}
-                className="w-[150px]"
-              />
-              <Button variant="outline" onClick={() => fetchTransactions()}>
-                <Filter className="h-4 w-4 mr-2" />
-                Apply
-              </Button>
+
+              {/* Advanced filters */}
+              {showAdvancedFilters && (
+                <div className="flex items-center gap-3 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Date:</span>
+                    <Input
+                      type="date"
+                      value={filters.startDate || ""}
+                      onChange={(e) => setFilters({ startDate: e.target.value || null })}
+                      className="h-8 w-[130px] text-sm"
+                    />
+                    <span className="text-muted-foreground">–</span>
+                    <Input
+                      type="date"
+                      value={filters.endDate || ""}
+                      onChange={(e) => setFilters({ endDate: e.target.value || null })}
+                      className="h-8 w-[130px] text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Amount:</span>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Min"
+                        value={filters.minAmount !== null ? (filters.minAmount / 100).toFixed(2) : ""}
+                        onChange={(e) => setFilters({
+                          minAmount: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null
+                        })}
+                        className="pl-5 h-8 w-[90px] text-sm"
+                      />
+                    </div>
+                    <span className="text-muted-foreground">–</span>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Max"
+                        value={filters.maxAmount !== null ? (filters.maxAmount / 100).toFixed(2) : ""}
+                        onChange={(e) => setFilters({
+                          maxAmount: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null
+                        })}
+                        className="pl-5 h-8 w-[90px] text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
 
         {/* Transaction List */}
-        <Card>
+        <Card className="flex-1 flex flex-col min-h-0">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between h-9">
               <CardTitle className={selectedIds.size > 0 ? "sr-only" : ""}>All Transactions</CardTitle>
@@ -372,7 +486,7 @@ export function Transactions() {
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 flex flex-col min-h-0">
             {transactions.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <ArrowLeftRight className="h-12 w-12 mx-auto mb-4 opacity-30" />
@@ -440,7 +554,7 @@ export function Transactions() {
                   </button>
                   <span className="shrink-0 w-6"></span>
                 </div>
-                <ScrollArea className="h-[500px]">
+                <ScrollArea className="flex-1 min-h-0">
                   <div className="space-y-1">
                     {sortedTransactions.map((tx, index) => (
                     <div
